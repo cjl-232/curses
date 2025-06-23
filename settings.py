@@ -18,7 +18,7 @@ class _DatabaseSettingsModel(BaseModel):
 class _DisplaySettingsModel(BaseModel):
     max_page_height: int = Field(
         ge=1,
-        default=20,
+        default=16,
         title='Maximum UI Height',
         description=(
             'The maximum number of lines in the terminal the UI should use for'

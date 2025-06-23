@@ -10,7 +10,6 @@ class Prompt(Component, metaclass=abc.ABCMeta):
     def __init__(self, message: str):
         self.message = message
         self.errors: list[str] = list()
-        self.cancelled = False
 
 class ChoicePrompt(Prompt):
     def __init__(self, message: str, choices: list[str]):
@@ -22,6 +21,7 @@ class ChoicePrompt(Prompt):
         self.choices = choices
 
     def run(self, stdscr: curses.window) -> int | None:
+        curses.curs_set(0)
         stdscr.nodelay(False)
         while True:
             stdscr.clear()
@@ -40,18 +40,18 @@ class ChoicePrompt(Prompt):
                 return int(chr(key))
             elif key == 27:
                 return None
-
-
-
-
-
-
+            
 class InputPrompt(Prompt):
-    def __init__(self, message: str):
+    def __init__(self, message: str, max_length: int | None = None):
         super().__init__(message)
         self.entry = ''
+        self.message = message
+        if max_length is not None and max_length < 1:
+            raise ValueError('Max length must be positive.')
+        self.max_length = max_length
 
     def run(self, stdscr: curses.window) -> str | None:
+        curses.curs_set(1)
         while True:
             stdscr.clear()
             stdscr.nodelay(True)
@@ -59,41 +59,49 @@ class InputPrompt(Prompt):
             y_pos = height - 1
             stdscr.move(y_pos, len(self.entry))
             stdscr.addstr(y_pos, 0, self.entry)
-            y_pos -= 1
-            stdscr.addstr(y_pos, 0, self.message)
             for error in self.errors[::-1]:
                 y_pos -= 1
                 stdscr.addstr(y_pos, 0, error)
+            y_pos -= 1
+            stdscr.addstr(y_pos, 0, self.message)
+            stdscr.move(height - 1, len(self.entry))
             stdscr.refresh()
             key = stdscr.getch()
-            if key == -1:
-                pass
-            elif key == 8 and self.entry:
-                self.entry = self.entry[:-1]
-            elif key == 10:
-                return self.entry.rstrip()
-            elif key == 27:
-                self.cancelled = True
-                return None
-            elif chr(key).isprintable():
-                self.entry += chr(key)
+            match key:
+                case -1:
+                    pass
+                case 8:
+                    self.entry = self.entry[:-1]
+                case 10:
+                    return self.entry.rstrip()
+                case 27:
+                    return None
+                case _:
+                    if chr(key).isprintable():
+                        self.entry += chr(key)
+            if self.max_length is not None:
+                self.entry = self.entry[:self.max_length]
 
 class Base64Prompt(Prompt):
-    def __init__(self, message: str, n_bytes: int | None = None):
+    def __init__(
+            self,
+            message: str,
+            max_length: int,
+            n_bytes: int | None = None,
+        ):
         super().__init__(message)
-        self.message = message
+        self.input_prompt = InputPrompt(message, max_length)
         if n_bytes is not None and n_bytes <= 0:
             raise ValueError('Required bytes length must be positive.')
         self.n_bytes = n_bytes
 
     def run(self, stdscr: curses.window) -> bytes | None:
-        input_prompt = InputPrompt(self.message)
         while True:
-            input = input_prompt.run(stdscr)
+            input = self.input_prompt.run(stdscr)
             if input is None:
                 return None
             try:
-                input_prompt.errors = self.errors
+                self.input_prompt.errors = self.errors
                 raw_bytes = urlsafe_b64decode(input)
                 if self.n_bytes is None or len(raw_bytes) == self.n_bytes:
                     return raw_bytes
@@ -102,14 +110,19 @@ class Base64Prompt(Prompt):
                         f'Value must have an unencoded length of '
                         f'{self.n_bytes} bytes.'
                     )
-                    input_prompt.errors.append(error_message)
+                    self.input_prompt.errors.append(error_message)
             except binascii.Error:
-                input_prompt.errors.append('Value must be valid Base64.')
+                self.input_prompt.errors.append('Value must be valid Base64.')
 
 class HexadecimalPrompt(Prompt):
-    def __init__(self, message: str, n_bytes: int | None = None):
+    def __init__(
+            self,
+            message: str,
+            max_length: int,
+            n_bytes: int | None = None,
+        ):
         super().__init__(message)
-        self.input_prompt = InputPrompt(message)
+        self.input_prompt = InputPrompt(message, max_length)
         if n_bytes is not None and n_bytes <= 0:
             raise ValueError('Required bytes length must be positive.')
         self.n_bytes = n_bytes

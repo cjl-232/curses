@@ -1,10 +1,14 @@
+# TODO implement absolute index and derive relative from it. Other way round is bad
+
 import curses
 import math
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from sqlalchemy import Engine
+from sqlalchemy.orm import Session
 
 from components.base import Component
+from components.messages import MessagesScreen
 from components.prompts import (
     Base64Prompt,
     ChoicePrompt,
@@ -12,6 +16,7 @@ from components.prompts import (
     InputPrompt,
 )
 from database.inputs.schemas import ContactInputSchema
+from database.models import Contact
 from database.operations import get_contacts
 from settings import settings
 
@@ -28,7 +33,10 @@ class AddContactDialog(Component):
             self,
             stdscr: curses.window,
         ) -> ContactInputSchema | None:
-        name_prompt = InputPrompt('Enter a name for the contact.')
+        name_prompt = InputPrompt(
+            message='Enter a name for the contact.',
+            max_length=255,
+        )
         while True:
             name = name_prompt.run(stdscr)
             if name is None:
@@ -54,6 +62,7 @@ class AddContactDialog(Component):
                         'Enter the contact\'s public key in Base64-encoded '
                         'form.'
                     ),
+                    max_length=44,
                     n_bytes=32,
                 )
             case 2:
@@ -62,6 +71,7 @@ class AddContactDialog(Component):
                         'Enter the contact\'s public key in non-negative '
                         'hexadecimal form.'
                     ),
+                    max_length=64,
                     n_bytes=32,
                 )
             case 3:
@@ -70,6 +80,7 @@ class AddContactDialog(Component):
                         'Enter the contact\'s public key in Base64-encoded '
                         'form.'
                     ),
+                    max_length=44,
                     n_bytes=32,
                 )
             case _:
@@ -120,9 +131,9 @@ class ContactsMenu(Component):
             else:
                 page_count = len(self.contacts)
             if self.page_index < 0:
-                self.page_index = 0
-            elif self.page_index >= page_count:
                 self.page_index = page_count - 1
+            elif self.page_index >= page_count:
+                self.page_index = 0
 
             # Extract the relevant contacts:
             start_index = self.page_index * contacts_per_page
@@ -189,7 +200,13 @@ class ContactsMenu(Component):
                 case curses.KEY_END | curses.KEY_NPAGE:
                     self.cursor_index = len(self.contacts)
                 case curses.KEY_F10:
-                    input = AddContactDialog(set(), set()).run(stdscr)
+                    used_names = set([x.name for x in self.contacts])
+                    used_key_bytes = set([
+                        contact.verification_key.public_bytes_raw()
+                        for contact in self.contacts
+                    ])
+                    input_prompt = AddContactDialog(used_names, used_key_bytes)
+                    input = input_prompt.run(stdscr)
                     if input is not None:
                         absolute_index = start_index + self.cursor_index
                         if input.name < self.contacts[absolute_index].name:
@@ -201,20 +218,6 @@ class ContactsMenu(Component):
                             session.add(Contact(**input.model_dump()))
                             session.commit()
                         self.contacts = get_contacts(self.engine)
-                case 10:
-                    if self.cursor_index < len(self.contacts):
-                        pass
-                    else:
-                        used_names: set[str] = set([
-                            contact.name
-                            for contact in self.contacts
-                        ])
-                        used_key_bytes: set[bytes] = set([
-                            contact.verification_key.public_bytes_raw()
-                            for contact in self.contacts
-                        ])
-                        dialog = AddContactDialog(used_names, used_key_bytes)
-                        dialog.run(stdscr)
                 case 27:
                     while True:
                         x = stdscr.getch()
@@ -224,22 +227,9 @@ class ContactsMenu(Component):
                     return
                 case 81 | 113:
                     exit()
+                case 10:
+                    messages = MessagesScreen(self.contacts[start_index + self.cursor_index])
+                    messages.run(stdscr)
                 case _:
                     pass
-
-if __name__ == '__main__':
-    from secrets import token_hex, token_urlsafe
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import Session
-    from settings import settings
-    from database.models import Base, Contact
-    engine = create_engine(settings.local_database.url)
-    #Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-    with Session(engine) as session:
-        for _ in range(20):
-            session.add(Contact(name=token_hex(16), verification_key=token_urlsafe(32)+'='))
-        session.commit()
-    menu = ContactsMenu(engine)
-    curses.wrapper(menu.run)
 
