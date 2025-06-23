@@ -1,2 +1,7 @@
+.env
+
 *.db
+*.pem
 *.yaml
+
+__pycache__/
