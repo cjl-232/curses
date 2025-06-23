@@ -20,6 +20,6 @@ def validate_key(value: str | _BytesLike | _PrivateKey | _PublicKey) -> str:
             return urlsafe_b64encode(raw_bytes).decode()
         raise ValueError('Value must have an unencoded length of 32 bytes.')
     elif isinstance(value, (Ed25519PrivateKey, X25519PrivateKey)):
-        return urlsafe_b64decode(value.private_bytes_raw()).decode()
+        return urlsafe_b64encode(value.private_bytes_raw()).decode()
     else:
-        return urlsafe_b64decode(value.public_bytes_raw()).decode()
+        return urlsafe_b64encode(value.public_bytes_raw()).decode()
