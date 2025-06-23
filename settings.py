@@ -15,7 +15,19 @@ class _DatabaseSettingsModel(BaseModel):
         ),
     )
 
+class _DisplaySettingsModel(BaseModel):
+    max_page_height: int = Field(
+        ge=1,
+        default=20,
+        title='Maximum UI Height',
+        description=(
+            'The maximum number of lines in the terminal the UI should use for'
+            'each page. Applies only to components that use pagination.'
+        ),
+    )
+
 class _SettingsModel(BaseModel):
+    display: _DisplaySettingsModel = _DisplaySettingsModel()
     local_database: _DatabaseSettingsModel = _DatabaseSettingsModel()
 
 def _load_settings():
