@@ -5,6 +5,7 @@ import curses
 from base64 import urlsafe_b64decode
 
 from components.base import Component
+from settings import settings
 
 class Prompt(Component, metaclass=abc.ABCMeta):
     def __init__(self, message: str):
@@ -54,7 +55,7 @@ class InputPrompt(Prompt):
         curses.curs_set(1)
         while True:
             stdscr.clear()
-            stdscr.nodelay(True)
+            stdscr.nodelay(settings.display.await_inputs == False)
             height = stdscr.getmaxyx()[0]
             y_pos = height - 1
             stdscr.move(y_pos, len(self.entry))
@@ -70,7 +71,7 @@ class InputPrompt(Prompt):
             match key:
                 case -1:
                     pass
-                case 8:
+                case 8 | curses.KEY_BACKSPACE:
                     self.entry = self.entry[:-1]
                 case 10:
                     return self.entry.rstrip()

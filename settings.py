@@ -19,10 +19,19 @@ class _DisplaySettingsModel(BaseModel):
     max_page_height: int = Field(
         ge=1,
         default=16,
-        title='Maximum UI Height',
+        title='Maximum Page Height',
         description=(
             'The maximum number of lines in the terminal the UI should use for'
             'each page. Applies only to components that use pagination.'
+        ),
+    )
+    await_inputs: bool = Field(
+        default=True,
+        title='Await Inputs',
+        description=(
+            'Whether UI components should pause refreshing while awaiting '
+            'inputs. Disabling this will make inputs behave more smoothly, '
+            'especially when holding down keys, but may reduce performance.'
         ),
     )
 

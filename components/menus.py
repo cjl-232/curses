@@ -33,7 +33,7 @@ class PaginatedMenu(Component, metaclass=abc.ABCMeta):
             # Clear the screen and set properties each iteration.
             stdscr.clear()
             curses.curs_set(0)
-            stdscr.nodelay(True)
+            stdscr.nodelay(settings.display.await_inputs == False)
 
             # Extract height information, and enforce a minimum.
             height = stdscr.getmaxyx()[0]
