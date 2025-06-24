@@ -4,6 +4,7 @@ import curses
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from sqlalchemy import Engine
+from sqlalchemy.orm import Session
 
 from components.base import Component
 from components.menus import PaginatedMenu
@@ -15,6 +16,7 @@ from components.prompts import (
     InputPrompt,
 )
 from database.inputs.schemas import ContactInputSchema
+from database.models import Contact
 from database.operations import get_contacts
 from database.outputs.schemas import ContactOutputSchema
 
@@ -108,14 +110,31 @@ class ContactsMenu(PaginatedMenu):
             break_after_action=False,
             additional_key_mappings={
                 curses.KEY_F5: self._refresh,
+                curses.KEY_F10: self._add_contact,
             },
         )
         self.engine = engine
         self.contacts = get_contacts(engine)
 
-    def _refresh(self):
+    def _refresh(self, _: curses.window):
         self.contacts = get_contacts(self.engine)
         self.items = [x.name for x in self.contacts]
+
+    def _add_contact(self, stdscr: curses.window):
+        used_names = set([x.name for x in self.contacts])
+        used_key_bytes = set([
+            contact.verification_key.public_bytes_raw()
+            for contact in self.contacts
+        ])
+        input_prompt = AddContactDialog(used_names, used_key_bytes)
+        input = input_prompt.run(stdscr)
+        if input is not None:
+            if input.name < self.contacts[self.cursor_index].name:
+                self.cursor_index += 1
+            with Session(self.engine) as session:
+                session.add(Contact(**input.model_dump()))
+                session.commit()
+            self._refresh(stdscr)
 
     def handle_selection(self, stdscr: curses.window, cursor_index: int):
         messages_screen = MessagesScreen(self.contacts[cursor_index])

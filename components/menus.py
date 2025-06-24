@@ -7,7 +7,7 @@ from typing import Callable
 from components.base import Component
 from settings import settings
 
-type _KeyPressDict = dict[int, Callable[[], None]]
+type _KeyPressDict = dict[int, Callable[[curses.window], None]]
 
 class PaginatedMenu(Component, metaclass=abc.ABCMeta):
     def __init__(
@@ -25,10 +25,10 @@ class PaginatedMenu(Component, metaclass=abc.ABCMeta):
         if additional_key_mappings is None:
             additional_key_mappings = {}
         self.additional_key_mappings = additional_key_mappings
+        self.cursor_index = 0
 
     def run(self, stdscr: curses.window):
         # Set up persistent variables and begin the loop.
-        cursor_index = 0
         while True:
             # Clear the screen and set properties each iteration.
             stdscr.clear()
@@ -49,8 +49,8 @@ class PaginatedMenu(Component, metaclass=abc.ABCMeta):
             page_count = math.ceil(len(self.items) / items_per_page)
 
             # Use the page size to work out the current cursor position.
-            current_page_index = cursor_index // items_per_page 
-            relative_cursor_index = cursor_index % items_per_page
+            current_page_index = self.cursor_index // items_per_page 
+            relative_cursor_index = self.cursor_index % items_per_page
 
             # Extract the relevant items.
             start = current_page_index * items_per_page
@@ -81,35 +81,35 @@ class PaginatedMenu(Component, metaclass=abc.ABCMeta):
             key = stdscr.getch()
             match key:
                 case curses.KEY_UP:
-                    cursor_index -= 1
-                    if cursor_index < 0:
-                        cursor_index = len(self.items) - 1
+                    self.cursor_index -= 1
+                    if self.cursor_index < 0:
+                        self.cursor_index = len(self.items) - 1
                 case curses.KEY_DOWN:
-                    cursor_index += 1
-                    if cursor_index >= len(self.items):
-                        cursor_index = 0
+                    self.cursor_index += 1
+                    if self.cursor_index >= len(self.items):
+                        self.cursor_index = 0
                 case curses.KEY_LEFT:
-                    cursor_index -= items_per_page
-                    if cursor_index < 0:
-                        cursor_index += page_count * items_per_page
-                        if cursor_index >= len(self.items):
-                            cursor_index = len(self.items) - 1
+                    self.cursor_index -= items_per_page
+                    if self.cursor_index < 0:
+                        self.cursor_index += page_count * items_per_page
+                        if self.cursor_index >= len(self.items):
+                            self.cursor_index = len(self.items) - 1
                 case curses.KEY_RIGHT:
-                    cursor_index += items_per_page
-                    if cursor_index >= len(self.items):
+                    self.cursor_index += items_per_page
+                    if self.cursor_index >= len(self.items):
                         if current_page_index == page_count - 1:
-                            cursor_index = relative_cursor_index
+                            self.cursor_index = relative_cursor_index
                         else:
-                            cursor_index = len(self.items) - 1
+                            self.cursor_index = len(self.items) - 1
                 case 10: # Enter
-                    self.handle_selection(stdscr, cursor_index)
+                    self.handle_selection(stdscr, self.cursor_index)
                     if self.break_after_action:
                         break
                 case 27: # Escape
                     break
                 case _:
                     if key in self.additional_key_mappings:
-                        self.additional_key_mappings[key]()
+                        self.additional_key_mappings[key](stdscr)
                         if self.break_after_action:
                             break
 
@@ -132,7 +132,7 @@ if __name__ == '__main__':
         def handle_selection(self, stdscr: curses.window, cursor_index: int):
             raise ValueError(self.items[cursor_index])
         
-        def key_handler(self):
+        def key_handler(self, _: curses.window):
             print('Pressed F10')
     
     curses.wrapper(TestMenu(title='Contacts', contacts=[get_full_name() for _ in range(40)]).run)
