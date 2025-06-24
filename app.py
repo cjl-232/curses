@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from settings import settings
 from database.models import Base, Contact
+from database.operations import get_contacts
 from components.contacts import ContactsMenu
 
 engine = create_engine(settings.local_database.url)
@@ -14,5 +15,5 @@ with Session(engine) as session:
     for _ in range(40):
         session.add(Contact(name=get_full_name(), verification_key=token_urlsafe(32)+'='))
     session.commit()
-menu = ContactsMenu(engine)
+menu = ContactsMenu(engine, get_contacts(engine))
 curses.wrapper(menu.run)
