@@ -2,21 +2,29 @@ import abc
 import curses
 import math
 
+from typing import Callable
+
 from components.base import Component
 from settings import settings
 
-class Menu(Component, metaclass=abc.ABCMeta):
+type _KeyPressDict = dict[int, Callable[[], None]]
+
+class PaginatedMenu(Component, metaclass=abc.ABCMeta):
     def __init__(
             self,
             title: str,
             items: list[str],
-            break_after_selection: bool = False,
+            break_after_action: bool = False,
+            additional_key_mappings: _KeyPressDict | None = None
         ):
         self.title = title
         if not items:
             raise ValueError('Empty menus are not allowed.')
         self.items = items
-        self.break_after_selection = break_after_selection
+        self.break_after_action = break_after_action
+        if additional_key_mappings is None:
+            additional_key_mappings = {}
+        self.additional_key_mappings = additional_key_mappings
 
     def run(self, stdscr: curses.window):
         # Set up persistent variables and begin the loop.
@@ -70,7 +78,8 @@ class Menu(Component, metaclass=abc.ABCMeta):
             stdscr.refresh()
 
             # Handle user input.
-            match stdscr.getch():
+            key = stdscr.getch()
+            match key:
                 case curses.KEY_UP:
                     cursor_index -= 1
                     if cursor_index < 0:
@@ -94,12 +103,15 @@ class Menu(Component, metaclass=abc.ABCMeta):
                             cursor_index = len(self.items) - 1
                 case 10: # Enter
                     self.handle_selection(stdscr, cursor_index)
-                    if self.break_after_selection:
+                    if self.break_after_action:
                         break
                 case 27: # Escape
                     break
                 case _:
-                    pass
+                    if key in self.additional_key_mappings:
+                        self.additional_key_mappings[key]()
+                        if self.break_after_action:
+                            break
 
     @abc.abstractmethod
     def handle_selection(self, stdscr: curses.window, cursor_index: int):
@@ -107,8 +119,20 @@ class Menu(Component, metaclass=abc.ABCMeta):
 
 if __name__ == '__main__':
     from names import get_full_name
-    class TestMenu(Menu):
+    class TestMenu(PaginatedMenu):
+        def __init__(self, title: str, contacts: list[str]):
+            super().__init__(
+                title=title,
+                items=contacts,
+                break_after_action=False,
+                additional_key_mappings={
+                    curses.KEY_F10: self.key_handler,
+                },
+            )
         def handle_selection(self, stdscr: curses.window, cursor_index: int):
             raise ValueError(self.items[cursor_index])
+        
+        def key_handler(self):
+            print('Pressed F10')
     
-    curses.wrapper(TestMenu(title='Contacts', items=[get_full_name() for _ in range(40)]).run)
+    curses.wrapper(TestMenu(title='Contacts', contacts=[get_full_name() for _ in range(40)]).run)
