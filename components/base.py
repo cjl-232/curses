@@ -63,16 +63,13 @@ class ComponentWindow(metaclass=abc.ABCMeta):
         value, unit = size
         match unit:
             case MeasurementUnit.PIXELS:
-                print(int(value))
                 return int(value)
             case MeasurementUnit.PERCENTAGE:
                 screen_height, screen_width = self._stdscr.getmaxyx()
                 match direction:
                     case Direction.VERTICAL:
-                        print(math.floor(value * screen_height))
                         return math.floor(value * screen_height)
                     case Direction.HORIZONTAL:
-                        print(math.floor(value * screen_width))
                         return math.floor(value * screen_width)
                     
     def _draw_border(self, focused: bool):
