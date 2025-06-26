@@ -1,15 +1,27 @@
 import abc
 import curses
+import enum
 import math
+
+class Direction(enum.Enum):
+    VERTICAL = 1
+    HORIZONTAL = 2
+
+class MeasurementUnit(enum.Enum):
+    PIXELS = 1
+    PERCENTAGE = 2
+
+type Measurement = tuple[int | float, MeasurementUnit]
 
 class ComponentWindow(metaclass=abc.ABCMeta):
     def __init__(
             self,
             stdscr: curses.window,
-            height: float,
-            width: float,
-            top: float,
-            left: float,
+            height: Measurement,
+            width: Measurement,
+            top: Measurement,
+            left: Measurement,
+            title: str | None = None,
             focusable: bool = True,
         ):
         self._stdscr = stdscr
@@ -17,6 +29,7 @@ class ComponentWindow(metaclass=abc.ABCMeta):
         self._width = width
         self._top = top
         self._left = left
+        self.title = title
         self._focusable = focusable
         self.reset_window()
 
@@ -39,10 +52,33 @@ class ComponentWindow(metaclass=abc.ABCMeta):
         return self._focusable
 
     def reset_window(self):
-        screen_height, screen_width = self._stdscr.getmaxyx()
         self._window = curses.newwin(
-            math.floor(self._height * screen_height),
-            math.floor(self._width * screen_width),
-            math.floor(self._top * screen_height),
-            math.floor(self._left * screen_width),
+            self._calculate_size(self._height, Direction.VERTICAL),
+            self._calculate_size(self._width, Direction.HORIZONTAL),
+            self._calculate_size(self._top, Direction.VERTICAL),
+            self._calculate_size(self._left, Direction.HORIZONTAL),
         )
+
+    def _calculate_size(self, size: Measurement, direction: Direction) -> int:
+        value, unit = size
+        match unit:
+            case MeasurementUnit.PIXELS:
+                print(int(value))
+                return int(value)
+            case MeasurementUnit.PERCENTAGE:
+                screen_height, screen_width = self._stdscr.getmaxyx()
+                match direction:
+                    case Direction.VERTICAL:
+                        print(math.floor(value * screen_height))
+                        return math.floor(value * screen_height)
+                    case Direction.HORIZONTAL:
+                        print(math.floor(value * screen_width))
+                        return math.floor(value * screen_width)
+                    
+    def _draw_border(self, focused: bool):
+        if focused:
+            self._window.attron(curses.A_BOLD)
+        self._window.box()
+        if self.title:
+            self._window.addstr(0, 2, f' {self.title} ')
+        self._window.attroff(curses.A_BOLD)
