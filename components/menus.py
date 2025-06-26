@@ -4,135 +4,144 @@ import math
 
 from typing import Callable
 
-from components.base import Component
-from settings import settings
+from components.base import ComponentWindow, Measurement
 
 type _KeyPressDict = dict[int, Callable[[curses.window], None]]
 
-class PaginatedMenu(Component, metaclass=abc.ABCMeta):
+class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
     def __init__(
             self,
-            title: str,
             items: list[str],
-            break_after_action: bool = False,
-            additional_key_mappings: _KeyPressDict | None = None
+            stdscr: curses.window,
+            height: Measurement,
+            width: Measurement,
+            top: Measurement,
+            left: Measurement,
+            title: str | None = None,
+            focusable: bool = True,
         ):
-        self.title = title
+        super().__init__(stdscr, height, width, top, left, title, focusable)
         if not items:
             raise ValueError('Empty menus are not allowed.')
         self.items = items
-        self.break_after_action = break_after_action
-        if additional_key_mappings is None:
-            additional_key_mappings = {}
-        self.additional_key_mappings = additional_key_mappings
         self.cursor_index = 0
 
-    def run(self, stdscr: curses.window):
-        # Set up persistent variables and begin the loop.
-        while True:
-            # Clear the screen and set properties each iteration.
-            stdscr.clear()
-            curses.curs_set(0)
-            stdscr.nodelay(settings.display.await_inputs == False)
+    def draw(self, focused: bool):
+        # Erase the window and redraw the border.
+        self._window.erase()
+        self._draw_border(focused)
 
-            # Extract height information, and enforce a minimum.
-            height = stdscr.getmaxyx()[0]
-            if height < 3:
-                stdscr.addstr(0, 0, 'Insufficient terminal height.')
-                stdscr.refresh()
-                continue
-            else:
-                stdscr.addstr(0, 0, ' ' * len('Insufficient terminal height.'))
-
-            # Work out the count and size of each page.
-            items_per_page = min(height - 2, settings.display.max_page_height)
-            page_count = math.ceil(len(self.items) / items_per_page)
-
-            # Use the page size to work out the current cursor position.
-            current_page_index = self.cursor_index // items_per_page 
-            relative_cursor_index = self.cursor_index % items_per_page
-
-            # Extract the relevant items.
-            start = current_page_index * items_per_page
-            stop = start + items_per_page
-            page_items = self.items[start:stop]
-
-            # Render the menu.
-            top_pos = height - items_per_page - 2
-            stdscr.attron(curses.A_BOLD)
-            stdscr.attron(curses.A_UNDERLINE)
-            stdscr.addstr(top_pos, 0, self.title)
-            stdscr.attroff(curses.A_BOLD)
-            stdscr.attroff(curses.A_UNDERLINE)
-            for index, item in enumerate(page_items):
-                if index == relative_cursor_index:
-                    stdscr.attron(curses.A_REVERSE)
-                    stdscr.addstr(top_pos + 1 + index, 0, item)
-                    stdscr.attroff(curses.A_REVERSE)
-                else:
-                    stdscr.addstr(top_pos + 1 + index, 0, item)
-            page_label = f'Page {current_page_index + 1} of {page_count}'
-            stdscr.attron(curses.A_ITALIC)
-            stdscr.addstr(height - 1, 0, page_label)
-            stdscr.attroff(curses.A_ITALIC)
-            stdscr.refresh()
-
-            # Handle user input.
-            key = stdscr.getch()
-            match key:
-                case curses.KEY_UP:
-                    self.cursor_index -= 1
-                    if self.cursor_index < 0:
-                        self.cursor_index = len(self.items) - 1
-                case curses.KEY_DOWN:
-                    self.cursor_index += 1
-                    if self.cursor_index >= len(self.items):
-                        self.cursor_index = 0
-                case curses.KEY_LEFT:
-                    self.cursor_index -= items_per_page
-                    if self.cursor_index < 0:
-                        self.cursor_index += page_count * items_per_page
-                        if self.cursor_index >= len(self.items):
-                            self.cursor_index = len(self.items) - 1
-                case curses.KEY_RIGHT:
-                    self.cursor_index += items_per_page
-                    if self.cursor_index >= len(self.items):
-                        if current_page_index == page_count - 1:
-                            self.cursor_index = relative_cursor_index
-                        else:
-                            self.cursor_index = len(self.items) - 1
-                case 10: # Enter
-                    self.handle_selection(stdscr, self.cursor_index)
-                    if self.break_after_action:
-                        break
-                case 27: # Escape
-                    break
-                case _:
-                    if key in self.additional_key_mappings:
-                        self.additional_key_mappings[key](stdscr)
-                        if self.break_after_action:
-                            break
-
-    @abc.abstractmethod
-    def handle_selection(self, stdscr: curses.window, cursor_index: int):
-        """Handle a menu option being selected."""
-
-if __name__ == '__main__':
-    from names import get_full_name
-    class TestMenu(PaginatedMenu):
-        def __init__(self, title: str, contacts: list[str]):
-            super().__init__(
-                title=title,
-                items=contacts,
-                break_after_action=False,
-                additional_key_mappings={
-                    curses.KEY_F10: self.key_handler,
-                },
-            )
-        def handle_selection(self, stdscr: curses.window, cursor_index: int):
-            raise ValueError(self.items[cursor_index])
+        # Determine the number of rows available.
+        height = self._window.getmaxyx()[0]
+        items_per_page = height - 3
         
-        def key_handler(self, _: curses.window):
-            print('Pressed F10')
-    
-    curses.wrapper(TestMenu(title='Contacts', contacts=[get_full_name() for _ in range(40)]).run)
+        # Work out the current cursor position.
+        page_count = math.ceil(len(self.items) / items_per_page)
+        current_page_index = self.cursor_index // items_per_page 
+        relative_cursor_index = self.cursor_index % items_per_page
+
+        # Extract the relevant items.
+        start = current_page_index * items_per_page
+        stop = start + items_per_page
+        page_items = self.items[start:stop]
+
+        # Render the menu.
+        for index, item in enumerate(page_items):
+            if index == relative_cursor_index:
+                self._window.attron(curses.A_REVERSE)
+                self._window.addstr(1 + index, 1, item)
+                self._window.attroff(curses.A_REVERSE)
+            else:
+                self._window.addstr(1 + index, 1, item)
+        page_label = f'Page {current_page_index + 1} of {page_count}'
+        self._window.addstr(height - 2, 1, page_label, curses.A_ITALIC)
+
+        # Refresh the window.
+        self._window.refresh()
+
+    # def run(self, stdscr: curses.window):
+    #     # Set up persistent variables and begin the loop.
+    #     while True:
+    #         # Clear the screen and set properties each iteration.
+    #         stdscr.clear()
+    #         curses.curs_set(0)
+    #         stdscr.nodelay(settings.display.await_inputs == False)
+
+    #         # Extract height information, and enforce a minimum.
+    #         height = stdscr.getmaxyx()[0]
+    #         if height < 5:
+    #             continue
+
+    #         # Work out the count and size of each page.
+    #         #items_per_page = min(height - 4, settings.display.max_page_height)
+    #         items_per_page = height - 4
+    #         page_count = math.ceil(len(self.items) / items_per_page)
+
+    #         # Use the page size to work out the current cursor position.
+    #         current_page_index = self.cursor_index // items_per_page 
+    #         relative_cursor_index = self.cursor_index % items_per_page
+
+    #         # Extract the relevant items.
+    #         start = current_page_index * items_per_page
+    #         stop = start + items_per_page
+    #         page_items = self.items[start:stop]
+
+    #         # Render the menu.
+    #         try:
+    #             stdscr.attron(curses.A_BOLD)
+    #             stdscr.attron(curses.A_UNDERLINE)
+    #             stdscr.addstr(1, 1, self.title)
+    #             stdscr.attroff(curses.A_BOLD)
+    #             stdscr.attroff(curses.A_UNDERLINE)
+    #             for index, item in enumerate(page_items):
+    #                 if index == relative_cursor_index:
+    #                     stdscr.attron(curses.A_REVERSE)
+    #                     stdscr.addstr(2 + index, 1, item)
+    #                     stdscr.attroff(curses.A_REVERSE)
+    #                 else:
+    #                     stdscr.addstr(2 + index, 1, item)
+    #             page_label = f'Page {current_page_index + 1} of {page_count}'
+    #             stdscr.attron(curses.A_ITALIC)
+    #             stdscr.addstr(height - 2, 1, page_label)
+    #             stdscr.attroff(curses.A_ITALIC)
+    #             stdscr.border()
+    #         except curses.error:
+    #             continue
+    #         stdscr.refresh()
+
+    #         # Handle user input.
+    #         key = stdscr.getch()
+    #         bindings = settings.key_bindings
+    #         if key == curses.KEY_UP or key in bindings.up_key_set:
+    #             self.cursor_index -= 1
+    #             if self.cursor_index < 0:
+    #                 self.cursor_index = len(self.items) - 1
+    #         elif key == curses.KEY_DOWN or key in bindings.down_key_set:
+    #             self.cursor_index += 1
+    #             if self.cursor_index >= len(self.items):
+    #                 self.cursor_index = 0
+    #         elif key == curses.KEY_LEFT or key in bindings.left_key_set:
+    #             self.cursor_index -= items_per_page
+    #             if self.cursor_index < 0:
+    #                 self.cursor_index += page_count * items_per_page
+    #                 if self.cursor_index >= len(self.items):
+    #                     self.cursor_index = len(self.items) - 1
+    #         elif key == curses.KEY_RIGHT or key in bindings.right_key_set:
+    #             self.cursor_index += items_per_page
+    #             if self.cursor_index >= len(self.items):
+    #                 if current_page_index == page_count - 1:
+    #                     self.cursor_index = relative_cursor_index
+    #                 else:
+    #                     self.cursor_index = len(self.items) - 1
+    #         elif key == curses.KEY_ENTER or key == ord('\n'):
+    #             self.handle_selection(stdscr, self.cursor_index)
+    #             if self.break_after_action:
+    #                 break
+    #         elif key in self.additional_key_mappings:
+    #             self.additional_key_mappings[key](stdscr)
+    #             if self.break_after_action:
+    #                 break
+
+    # @abc.abstractmethod
+    # def handle_selection(self, stdscr: curses.window, cursor_index: int):
+    #     """Handle a menu option being selected."""
