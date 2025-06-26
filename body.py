@@ -13,9 +13,9 @@ class Body:
     def __init__(self):
         self.component_index = 0
         self.components: list[ComponentWindow] = [
-            Example(100, 100),
-            Example(100, 100, 100, 100),
-            Example(100, 200, 0, 200),
+            Example(10, 10),
+            Example(10, 10, 10, 10),
+            Example(10, 20, 0, 20),
         ]
 
     def run(self, stdscr: curses.window):
@@ -32,5 +32,4 @@ class Body:
                     if self.components[self.component_index].is_focusable:
                         break
 
-body = Body()
-curses.wrapper(body.run)
+curses.wrapper(lambda stdscr: Body().run(stdscr))
