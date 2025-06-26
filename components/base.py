@@ -18,7 +18,14 @@ class ComponentWindow(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def draw(self):
-        """Draw the window on the terminal. Always begin by erasing."""
+        """
+        Draw the window on the stdscr terminal.
+
+        This function should begin by calling self._window.erase, unless it
+        is certain nothing will need to be erased. It should always draw a
+        border if self._bordered == True. It should always conclude by calling
+        self._window.refresh.
+        """
 
     @abc.abstractmethod
     def handle_key(self, key: int):
@@ -27,6 +34,9 @@ class ComponentWindow(metaclass=abc.ABCMeta):
     @property
     def is_focusable(self):
         return self._focusable
+
+    def resize(self, height: int, width: int, top: int = 0, left: int = 0):
+        self._window = curses.newwin(height, width, top, left)
 
     def set_focused(self, focused: bool):
         """Set whether the window is focused. Redraw borders if relevant."""
@@ -38,6 +48,3 @@ class ComponentWindow(metaclass=abc.ABCMeta):
             else:
                 self._window.box()
         self._focused = focused
-
-    def resize(self, height: int, width: int, top: int = 0, left: int = 0):
-        self._window = curses.newwin(height, width, top, left)
