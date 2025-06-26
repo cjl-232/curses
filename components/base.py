@@ -46,7 +46,3 @@ class ComponentWindow(metaclass=abc.ABCMeta):
             math.floor(self._top * screen_height),
             math.floor(self._left * screen_width),
         )
-
-    def set_focused(self, focused: bool):
-        """Set whether the window is focused."""
-        self._focused = focused
