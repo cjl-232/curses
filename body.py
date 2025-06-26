@@ -67,6 +67,9 @@ class Body:
                 stdscr.erase()                
                 for component in self.components:
                     component.reset_window()
+                stdscr.refresh()
+            else:
+                self.components[self.component_index].handle_key(key)
 
     def _draw_components(self):
         for index, component in enumerate(self.components):
