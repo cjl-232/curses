@@ -63,16 +63,19 @@ class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
 
         # Refresh the window.
         self._window.refresh()
+        self.draw_required = False
 
     def handle_key(self, key: int):
         if key in settings.key_bindings.up_key_set:
             self.cursor_index -= 1
             if self.cursor_index < 0:
                 self.cursor_index = len(self.items) - 1
+            self.draw_required = True
         elif key in settings.key_bindings.down_key_set:
             self.cursor_index += 1
             if self.cursor_index >= len(self.items):
                 self.cursor_index = 0
+            self.draw_required = True
         elif key in settings.key_bindings.left_key_set:
             items_per_page = self._window.getmaxyx()[0] - 3
             page_count = math.ceil(len(self.items) / items_per_page)
@@ -83,13 +86,22 @@ class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
                 self.cursor_index = last_page_index + relative_cursor_index
                 if self.cursor_index >= len(self.items):
                     self.cursor_index = len(self.items) - 1
+            self.draw_required = True
         elif key in settings.key_bindings.right_key_set:
             items_per_page = self._window.getmaxyx()[0] - 3
+            page_count = math.ceil(len(self.items) / items_per_page)
+            last_page_index = items_per_page * (page_count - 1)
             relative_cursor_index = self.cursor_index % items_per_page
             self.cursor_index += items_per_page
             if self.cursor_index >= len(self.items):
-                self.cursor_index = relative_cursor_index
-        elif key == curses.KEY_HOME:
+                if self.cursor_index - items_per_page >= last_page_index:
+                    self.cursor_index = relative_cursor_index
+                else:
+                    self.cursor_index = len(self.items) - 1
+            self.draw_required = True
+        elif key == curses.KEY_HOME and self.cursor_index != 0:
             self.cursor_index = 0
-        elif key == curses.KEY_END:
+            self.draw_required = True
+        elif key == curses.KEY_END and self.cursor_index < len(self.items) - 1:
             self.cursor_index = len(self.items) - 1
+            self.draw_required = True

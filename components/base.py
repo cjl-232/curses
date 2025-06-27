@@ -31,6 +31,7 @@ class ComponentWindow(metaclass=abc.ABCMeta):
         self._left = left
         self.title = title
         self._focusable = focusable
+        self.draw_required: bool = True
         self.reset_window()
 
     @abc.abstractmethod
@@ -58,6 +59,7 @@ class ComponentWindow(metaclass=abc.ABCMeta):
             self._calculate_size(self._top, Direction.VERTICAL),
             self._calculate_size(self._left, Direction.HORIZONTAL),
         )
+        self.draw_required = True
 
     def _calculate_size(self, size: Measurement, direction: Direction) -> int:
         value, unit = size
