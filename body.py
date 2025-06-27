@@ -3,6 +3,7 @@
 import curses
 
 from components.base import ComponentWindow, MeasurementUnit
+from components.contacts import ContactsMenu
 from components.menus import PaginatedMenu
 
 class Example(ComponentWindow):
@@ -36,19 +37,32 @@ class Menu(PaginatedMenu):
                 pass
 
 
-from secrets import token_hex
+from base64 import urlsafe_b64encode
+from secrets import token_bytes, token_hex
+from sqlalchemy import create_engine
+from database.models import Base, Contact
+engine = create_engine('sqlite:///contacttest.db')
+Base.metadata.create_all(engine)
+from sqlalchemy.orm import Session
+with Session(engine) as session:
+    for _ in range(20):
+        contact = Contact(name=f'Contact #{token_hex(8)}', verification_key=urlsafe_b64encode(token_bytes(32)).decode())
+        session.add(contact)
+    session.commit()
+
+
 class Body:
     def __init__(self, stdscr: curses.window):
         self.component_index = 0
         self.components: list[ComponentWindow] = [
-            Menu(
-                items=[token_hex(12) for _ in range(50)],
+            ContactsMenu(
+                engine=engine,
                 stdscr=stdscr,
                 height=(0.8, MeasurementUnit.PERCENTAGE),
                 width=(0.2, MeasurementUnit.PERCENTAGE),
                 top=(0, MeasurementUnit.PIXELS),
                 left=(0, MeasurementUnit.PIXELS),
-                title='Window 1',
+                title='Contacts',
             ),
             Example(
                 stdscr=stdscr,

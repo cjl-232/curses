@@ -5,6 +5,7 @@ import math
 from typing import Callable
 
 from components.base import ComponentWindow, Measurement
+from settings import settings
 
 type _KeyPressDict = dict[int, Callable[[curses.window], None]]
 
@@ -31,8 +32,12 @@ class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
         self._window.erase()
         self._draw_border(focused)
 
+        # Hide the cursor and enable the keypad.
+        curses.curs_set(0)
+        self._window.keypad(True)
+
         # Determine the number of rows available.
-        height = self._window.getmaxyx()[0]
+        height, width = self._window.getmaxyx()
         items_per_page = height - 3
         
         # Work out the current cursor position.
@@ -49,15 +54,26 @@ class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
         for index, item in enumerate(page_items):
             if index == relative_cursor_index:
                 self._window.attron(curses.A_REVERSE)
-                self._window.addstr(1 + index, 1, item)
+                self._window.addnstr(1 + index, 1, item, width - 2)
                 self._window.attroff(curses.A_REVERSE)
             else:
-                self._window.addstr(1 + index, 1, item)
+                self._window.addnstr(1 + index, 1, item, width - 2)
         page_label = f'Page {current_page_index + 1} of {page_count}'
         self._window.addstr(height - 2, 1, page_label, curses.A_ITALIC)
 
         # Refresh the window.
         self._window.refresh()
+
+    def handle_key(self, key: int):
+        if key in settings.key_bindings.up_key_set:
+            self.cursor_index -= 1
+            if self.cursor_index < 0:
+                self.cursor_index = len(self.items) - 1
+        elif key in settings.key_bindings.down_key_set:
+            self.cursor_index += 1
+            if self.cursor_index >= len(self.items):
+                self.cursor_index = 0
+
 
     # def run(self, stdscr: curses.window):
     #     # Set up persistent variables and begin the loop.

@@ -1,6 +1,10 @@
+import curses
 import os
 
-from pydantic import BaseModel, Field
+from functools import cached_property
+from typing import Annotated
+
+from pydantic import BaseModel, BeforeValidator, Field
 from yaml import safe_dump, safe_load
 
 class _DatabaseSettingsModel(BaseModel):
@@ -35,8 +39,42 @@ class _DisplaySettingsModel(BaseModel):
         ),
     )
 
+def _validate_key(key: int | str) -> str:
+    if isinstance(key, int):
+        key = str(key)
+    return key.lower()
+
+def _validate_keys(keys: list[int | str] | set[int | str]) -> list[str]:
+    return [_validate_key(key) for key in keys]
+
+type _KeyBindingList = Annotated[
+    list[str],
+    BeforeValidator(_validate_keys),
+]
+
+class _KeyBindingsModel(BaseModel):
+    up_keys: _KeyBindingList = ['w']
+    down_keys: _KeyBindingList = ['s']
+    left_keys: _KeyBindingList = ['a']
+    right_keys: _KeyBindingList = ['d']
+    
+    @cached_property
+    def up_key_set(self):
+        return set([curses.KEY_UP] + [ord(x) for x in self.up_keys])
+    @cached_property
+    def down_key_set(self):
+        return set([curses.KEY_DOWN] + [ord(x) for x in self.down_keys])
+    @cached_property
+    def left_key_set(self):
+        return set([curses.KEY_LEFT] + [ord(x) for x in self.left_keys])
+    @cached_property
+    def right_key_set(self):
+        return set([curses.KEY_RIGHT] + [ord(x) for x in self.right_keys])
+
+
 class _SettingsModel(BaseModel):
     display: _DisplaySettingsModel = _DisplaySettingsModel()
+    key_bindings: _KeyBindingsModel = _KeyBindingsModel()
     local_database: _DatabaseSettingsModel = _DatabaseSettingsModel()
 
 def _load_settings():
