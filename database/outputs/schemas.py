@@ -1,5 +1,8 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
+from database.models import MessageType
 from database.outputs.types import VerificationKey
 
 class ContactOutputSchema(BaseModel):
@@ -9,4 +12,13 @@ class ContactOutputSchema(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
+        from_attributes = True
+
+class MessageOutputSchema(BaseModel):
+    text: str
+    timestamp: datetime
+    message_type: MessageType
+    nonce: str
+
+    class Config:
         from_attributes = True
