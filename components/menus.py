@@ -2,12 +2,8 @@ import abc
 import curses
 import math
 
-from typing import Callable
-
 from components.base import ComponentWindow, Measurement
 from settings import settings
-
-type _KeyPressDict = dict[int, Callable[[curses.window], None]]
 
 class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
     def __init__(
@@ -52,7 +48,7 @@ class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
 
         # Render the menu.
         for index, item in enumerate(page_items):
-            if index == relative_cursor_index:
+            if index == relative_cursor_index and focused:
                 self._window.attron(curses.A_REVERSE)
                 self._window.addnstr(1 + index, 1, item, width - 2)
                 self._window.attroff(curses.A_REVERSE)
@@ -66,21 +62,29 @@ class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
         self.draw_required = False
 
     def handle_key(self, key: int):
+        items_per_page = self._window.getmaxyx()[0] - 3
+        page_count = math.ceil(len(self.items) / items_per_page)
+        last_page_index = items_per_page * (page_count - 1)
+        relative_cursor_index = self.cursor_index % items_per_page
         if key in settings.key_bindings.up_key_set:
-            self.cursor_index -= 1
-            if self.cursor_index < 0:
-                self.cursor_index = len(self.items) - 1
+            if relative_cursor_index != 0:
+                self.cursor_index -= 1
+                if self.cursor_index < 0:
+                    self.cursor_index = len(self.items) - 1
+            else:
+                self.cursor_index += items_per_page - 1
+                if self.cursor_index >= len(self.items):
+                    self.cursor_index = len(self.items) - 1
             self.draw_required = True
         elif key in settings.key_bindings.down_key_set:
-            self.cursor_index += 1
-            if self.cursor_index >= len(self.items):
+            if relative_cursor_index != items_per_page - 1:
+                self.cursor_index += 1
+                if self.cursor_index >= len(self.items):
+                    self.cursor_index = 0
+            else:
                 self.cursor_index = 0
             self.draw_required = True
         elif key in settings.key_bindings.left_key_set:
-            items_per_page = self._window.getmaxyx()[0] - 3
-            page_count = math.ceil(len(self.items) / items_per_page)
-            last_page_index = items_per_page * (page_count - 1)
-            relative_cursor_index = self.cursor_index % items_per_page
             self.cursor_index -= items_per_page
             if self.cursor_index < 0:
                 self.cursor_index = last_page_index + relative_cursor_index
@@ -88,10 +92,6 @@ class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
                     self.cursor_index = len(self.items) - 1
             self.draw_required = True
         elif key in settings.key_bindings.right_key_set:
-            items_per_page = self._window.getmaxyx()[0] - 3
-            page_count = math.ceil(len(self.items) / items_per_page)
-            last_page_index = items_per_page * (page_count - 1)
-            relative_cursor_index = self.cursor_index % items_per_page
             self.cursor_index += items_per_page
             if self.cursor_index >= len(self.items):
                 if self.cursor_index - items_per_page >= last_page_index:

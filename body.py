@@ -3,7 +3,7 @@
 import curses
 
 from components.base import ComponentWindow, MeasurementUnit
-from components.contacts import ContactsMenu, get_contacts
+from components.contacts import ContactsMenu
 from components.menus import PaginatedMenu
 from components.messages import MessageLog
 
@@ -40,8 +40,6 @@ class Menu(PaginatedMenu):
                 pass
 
 
-from base64 import urlsafe_b64encode
-from secrets import token_bytes, token_hex
 from sqlalchemy import create_engine
 from database.models import Base, Contact
 engine = create_engine('sqlite:///contacttest.db')
@@ -60,9 +58,19 @@ class Body:
         with Session(engine) as session:
             contact = ContactOutputSchema.model_validate(session.get(Contact, 1))
         self.component_index = 0
+        message_log = MessageLog(
+            engine=engine,
+            contact=contact,
+            stdscr=stdscr,
+            height=(0.8, MeasurementUnit.PERCENTAGE),
+            width=(0.8, MeasurementUnit.PERCENTAGE),
+            top=(0, MeasurementUnit.PIXELS),
+            left=(0.2, MeasurementUnit.PERCENTAGE),
+        )
         self.components: list[ComponentWindow] = [
             ContactsMenu(
                 engine=engine,
+                message_log=message_log,
                 stdscr=stdscr,
                 height=(0.8, MeasurementUnit.PERCENTAGE),
                 width=(0.2, MeasurementUnit.PERCENTAGE),
@@ -70,15 +78,7 @@ class Body:
                 left=(0, MeasurementUnit.PIXELS),
                 title='Contacts',
             ),
-            MessageLog(
-                engine=engine,
-                contact=contact,
-                stdscr=stdscr,
-                height=(0.8, MeasurementUnit.PERCENTAGE),
-                width=(0.8, MeasurementUnit.PERCENTAGE),
-                top=(0, MeasurementUnit.PIXELS),
-                left=(0.2, MeasurementUnit.PERCENTAGE),
-            ),
+            message_log,
             Example(
                 stdscr=stdscr,
                 height=(0.2, MeasurementUnit.PERCENTAGE),
