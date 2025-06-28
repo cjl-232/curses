@@ -213,6 +213,7 @@ class MessageEntry(_MessageComponent):
         else:
             curses.curs_set(0)
 
+        # Wrap the input text.
         input_lines = textwrap.wrap(
             text=self._input,
             width=width,
@@ -220,23 +221,29 @@ class MessageEntry(_MessageComponent):
         )
         cursor_line, cursor_col = self._get_cursor_position(input_lines)
 
-        # Determine visible lines.
+        # Determine visible lines and the cursor position.
         if len(input_lines) < height:
             visible_lines = input_lines
         else:
             start_line = max(0, cursor_line - height + 1)
             visible_lines = input_lines[start_line:cursor_line + 1]
+        cursor_y = height
+        cursor_y -= cursor_line - (len(input_lines) - len(visible_lines))
+        cursor_x = cursor_col + 1
+        if cursor_x >= width + 2:
+            cursor_x = 1
+            cursor_y += 1
+            visible_lines.append('')
 
         # Draw each line.
         for index, line in enumerate(reversed(visible_lines)):
             self._window.addnstr(height - index, 1, line, width)
 
+        # Set the cursor if focused.
         if focused:
-            cursor_y = 1 + height
-            cursor_y -= cursor_line - (len(input_lines) - len(visible_lines))
-            cursor_x = cursor_col + 1
             self._window.move(cursor_y, cursor_x)
 
+        # Refresh the window.
         self._window.refresh()
         self.draw_required = False
         
