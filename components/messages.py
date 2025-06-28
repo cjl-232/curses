@@ -231,9 +231,9 @@ class MessageEntry(_MessageComponent):
         cursor_y = height
         cursor_y -= cursor_line - (len(input_lines) - len(visible_lines))
         cursor_x = cursor_col + 1
-        if cursor_x >= width + 2:
-            cursor_x = 1
-            cursor_y += 1
+        cursor_y = height + 1 - (len(input_lines) - cursor_line)
+        if cursor_col == 0:
+            #cursor_y += 1
             visible_lines.append('')
 
         # Draw each line.
@@ -322,9 +322,9 @@ class MessageEntry(_MessageComponent):
         remaining_characters = self._cursor_index
         for index, line in enumerate(input_lines):
             if remaining_characters < width:
-                return index, min(remaining_characters, len(line))
+                return index, remaining_characters
             else:
-                remaining_characters -= width
+                remaining_characters -= len(line)
         return len(input_lines), 0
 
 
