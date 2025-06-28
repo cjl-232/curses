@@ -219,7 +219,7 @@ class MessageEntry(_MessageComponent):
             width=width,
             drop_whitespace=False,
         )
-        cursor_line, cursor_col = self._get_cursor_position(input_lines)
+        cursor_line, cursor_col = self._get_cursor_position(input_lines, width)
 
         # Determine visible lines and the cursor position.
         if len(input_lines) < height:
@@ -230,6 +230,7 @@ class MessageEntry(_MessageComponent):
         cursor_y = height
         cursor_y -= cursor_line - (len(input_lines) - len(visible_lines))
         cursor_x = cursor_col + 1
+        print(cursor_x, width + 2)
         if cursor_x >= width + 2:
             cursor_x = 1
             cursor_y += 1
@@ -316,14 +317,14 @@ class MessageEntry(_MessageComponent):
     def _get_cursor_position(
             self,
             input_lines: list[str],
+            width: int,
         ) -> tuple[int, int]:
         remaining_characters = self._cursor_index
         for index, line in enumerate(input_lines):
-            if remaining_characters == len(line):
-                return index, remaining_characters
-            elif remaining_characters < len(line):
-                return index + 1, 0
-            remaining_characters -= len(line)
+            if remaining_characters < width:
+                return index, len(line)
+            else:
+                remaining_characters -= width
         return len(input_lines), 0
 
 
