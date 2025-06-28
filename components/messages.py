@@ -220,6 +220,7 @@ class MessageEntry(_MessageComponent):
             drop_whitespace=False,
         )
         cursor_line, cursor_col = self._get_cursor_position(input_lines, width)
+        print(cursor_line, cursor_col)
 
         # Determine visible lines and the cursor position.
         if len(input_lines) < height:
@@ -321,7 +322,7 @@ class MessageEntry(_MessageComponent):
         remaining_characters = self._cursor_index
         for index, line in enumerate(input_lines):
             if remaining_characters < width:
-                return index, len(line)
+                return index, min(remaining_characters, len(line))
             else:
                 remaining_characters -= width
         return len(input_lines), 0
