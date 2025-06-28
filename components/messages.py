@@ -230,7 +230,6 @@ class MessageEntry(_MessageComponent):
         cursor_y = height
         cursor_y -= cursor_line - (len(input_lines) - len(visible_lines))
         cursor_x = cursor_col + 1
-        print(cursor_x, width + 2)
         if cursor_x >= width + 2:
             cursor_x = 1
             cursor_y += 1
