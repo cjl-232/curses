@@ -313,13 +313,10 @@ class MessageEntry(_MessageComponent):
         remaining_characters = self._cursor_index
         for index, line in enumerate(input_lines):
             if remaining_characters == len(line):
-                print(index, remaining_characters)
                 return index, remaining_characters
             elif remaining_characters < len(line):
-                print(index + 1, 0)
                 return index + 1, 0
             remaining_characters -= len(line)
-        print(len(input_lines), 0)
         return len(input_lines), 0
 
 
