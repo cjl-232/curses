@@ -6,13 +6,14 @@ from sqlalchemy import Engine
 
 from components.base import Measurement
 from components.menus import PaginatedMenu
-from components.messages import MessageLog
+from components.messages import MessageEntry, MessageLog
 from database.operations import get_contacts
 
 class ContactsMenu(PaginatedMenu):
     def __init__(
             self,
             engine: Engine,
+            message_entry: MessageEntry,
             message_log: MessageLog,
             stdscr: curses.window,
             height: Measurement,
@@ -22,11 +23,12 @@ class ContactsMenu(PaginatedMenu):
             title: str | None = None,
             focusable: bool = True,
         ):
-        self.engine = engine
-        self.contacts = get_contacts(engine)
-        self.message_log = message_log
+        self._engine = engine
+        self._contacts = get_contacts(engine)
+        self._message_entry = message_entry
+        self._message_log = message_log
         super().__init__(
-            items=[x.name for x in self.contacts],
+            items=[x.name for x in self._contacts],
             stdscr=stdscr,
             height=height,
             width=width,
@@ -41,10 +43,12 @@ class ContactsMenu(PaginatedMenu):
             case curses.KEY_F5:
                 self._refresh()
             case curses.KEY_ENTER | 10:
-                self.message_log.set_contact(self.contacts[self.cursor_index])
+                contact = self._contacts[self._cursor_index]
+                self._message_entry.set_contact(contact)
+                self._message_log.set_contact(contact)
             case _:
                 super().handle_key(key)
 
     def _refresh(self):
-        self.contacts = get_contacts(self.engine)
-        self.items = [x.name for x in self.contacts]
+        self._contacts = get_contacts(self._engine)
+        self._items = [x.name for x in self._contacts]

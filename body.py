@@ -4,8 +4,7 @@ import curses
 
 from components.base import ComponentWindow, MeasurementUnit
 from components.contacts import ContactsMenu
-from components.menus import PaginatedMenu
-from components.messages import MessageLog
+from components.messages import MessageEntry, MessageLog
 
 class Example(ComponentWindow):
 
@@ -20,24 +19,6 @@ class Example(ComponentWindow):
     def handle_key(self, key: int):
         """Handle key presses when this window is active."""
 
-class Menu(PaginatedMenu):
-    def __init__(self, items: list[str], stdscr: curses.window, height: tuple[int | float, MeasurementUnit], width: tuple[int | float, MeasurementUnit], top: tuple[int | float, MeasurementUnit], left: tuple[int | float, MeasurementUnit], title: str | None = None, focusable: bool = True):
-        super().__init__(items, stdscr, height, width, top, left, title, focusable)
-    
-    def handle_key(self, key: int):
-        match key:
-            case curses.KEY_UP:
-                self.cursor_index -= 1
-                if self.cursor_index < 0:
-                    self.cursor_index = len(self.items) - 1
-                self.draw(focused=True)
-            case curses.KEY_DOWN:
-                self.cursor_index += 1
-                if self.cursor_index >= len(self.items):
-                    self.cursor_index = 0
-                self.draw(focused=True)
-            case _:
-                pass
 
 
 from sqlalchemy import create_engine
@@ -58,18 +39,28 @@ class Body:
         with Session(engine) as session:
             contact = ContactOutputSchema.model_validate(session.get(Contact, 1))
         self.component_index = 0
+        message_entry = MessageEntry(
+            engine=engine,
+            contact=contact,
+            stdscr=stdscr,
+            height=(0.2, MeasurementUnit.PERCENTAGE),
+            width=(0.8, MeasurementUnit.PERCENTAGE),
+            top=(0.6, MeasurementUnit.PERCENTAGE),
+            left=(0.2, MeasurementUnit.PERCENTAGE),
+        )
         message_log = MessageLog(
             engine=engine,
             contact=contact,
             stdscr=stdscr,
-            height=(0.8, MeasurementUnit.PERCENTAGE),
+            height=(0.6, MeasurementUnit.PERCENTAGE),
             width=(0.8, MeasurementUnit.PERCENTAGE),
-            top=(0, MeasurementUnit.PIXELS),
+            top=(0.0, MeasurementUnit.PERCENTAGE),
             left=(0.2, MeasurementUnit.PERCENTAGE),
         )
         self.components: list[ComponentWindow] = [
             ContactsMenu(
                 engine=engine,
+                message_entry=message_entry,
                 message_log=message_log,
                 stdscr=stdscr,
                 height=(0.8, MeasurementUnit.PERCENTAGE),
@@ -79,6 +70,7 @@ class Body:
                 title='Contacts',
             ),
             message_log,
+            message_entry,
             Example(
                 stdscr=stdscr,
                 height=(0.2, MeasurementUnit.PERCENTAGE),
@@ -89,18 +81,22 @@ class Body:
             ),
         ]
 
-    
-
     def run(self, stdscr: curses.window):
         stdscr.keypad(True)
         stdscr.nodelay(True)
         stdscr.clear()
         stdscr.refresh()
+        for component in self.components:
+            component.reset_window()
         while True:
             self._draw_components()
+            active_component = self.components[self.component_index]
             key = stdscr.getch()
             if key == 81 or key == 113: # Q
-                break
+                if not isinstance(active_component, MessageEntry):
+                    break
+                else:
+                    active_component.handle_key(key)
             elif key == 9 or key == curses.KEY_BTAB: # TAB or SHIFT-TAB
                 self.components[self.component_index].draw_required = True
                 for _ in range(len(self.components)):

@@ -20,8 +20,8 @@ class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
         super().__init__(stdscr, height, width, top, left, title, focusable)
         if not items:
             raise ValueError('Empty menus are not allowed.')
-        self.items = items
-        self.cursor_index: int = 0
+        self._items = items
+        self._cursor_index: int = 0
 
     def draw(self, focused: bool):
         # Erase the window and redraw the border.
@@ -37,14 +37,14 @@ class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
         items_per_page = height - 3
         
         # Work out the current cursor position.
-        page_count = math.ceil(len(self.items) / items_per_page)
-        current_page_index = self.cursor_index // items_per_page 
-        relative_cursor_index = self.cursor_index % items_per_page
+        page_count = math.ceil(len(self._items) / items_per_page)
+        current_page_index = self._cursor_index // items_per_page 
+        relative_cursor_index = self._cursor_index % items_per_page
 
         # Extract the relevant items.
         start = current_page_index * items_per_page
         stop = start + items_per_page
-        page_items = self.items[start:stop]
+        page_items = self._items[start:stop]
 
         # Render the menu.
         for index, item in enumerate(page_items):
@@ -63,45 +63,46 @@ class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
 
     def handle_key(self, key: int):
         items_per_page = self._window.getmaxyx()[0] - 3
-        page_count = math.ceil(len(self.items) / items_per_page)
+        page_count = math.ceil(len(self._items) / items_per_page)
         last_page_index = items_per_page * (page_count - 1)
-        relative_cursor_index = self.cursor_index % items_per_page
+        relative_cursor_index = self._cursor_index % items_per_page
         if key in settings.key_bindings.up_key_set:
             if relative_cursor_index != 0:
-                self.cursor_index -= 1
-                if self.cursor_index < 0:
-                    self.cursor_index = len(self.items) - 1
+                self._cursor_index -= 1
+                if self._cursor_index < 0:
+                    self._cursor_index = len(self._items) - 1
             else:
-                self.cursor_index += items_per_page - 1
-                if self.cursor_index >= len(self.items):
-                    self.cursor_index = len(self.items) - 1
+                self._cursor_index += items_per_page - 1
+                if self._cursor_index >= len(self._items):
+                    self._cursor_index = len(self._items) - 1
             self.draw_required = True
         elif key in settings.key_bindings.down_key_set:
             if relative_cursor_index != items_per_page - 1:
-                self.cursor_index += 1
-                if self.cursor_index >= len(self.items):
-                    self.cursor_index = 0
+                self._cursor_index += 1
+                if self._cursor_index >= len(self._items):
+                    self._cursor_index = 0
             else:
-                self.cursor_index = 0
+                self._cursor_index = 0
             self.draw_required = True
         elif key in settings.key_bindings.left_key_set:
-            self.cursor_index -= items_per_page
-            if self.cursor_index < 0:
-                self.cursor_index = last_page_index + relative_cursor_index
-                if self.cursor_index >= len(self.items):
-                    self.cursor_index = len(self.items) - 1
+            self._cursor_index -= items_per_page
+            if self._cursor_index < 0:
+                self._cursor_index = last_page_index + relative_cursor_index
+                if self._cursor_index >= len(self._items):
+                    self._cursor_index = len(self._items) - 1
             self.draw_required = True
         elif key in settings.key_bindings.right_key_set:
-            self.cursor_index += items_per_page
-            if self.cursor_index >= len(self.items):
-                if self.cursor_index - items_per_page >= last_page_index:
-                    self.cursor_index = relative_cursor_index
+            self._cursor_index += items_per_page
+            if self._cursor_index >= len(self._items):
+                if self._cursor_index - items_per_page >= last_page_index:
+                    self._cursor_index = relative_cursor_index
                 else:
-                    self.cursor_index = len(self.items) - 1
+                    self._cursor_index = len(self._items) - 1
             self.draw_required = True
-        elif key == curses.KEY_HOME and self.cursor_index != 0:
-            self.cursor_index = 0
+        elif key == curses.KEY_HOME and self._cursor_index != 0:
+            self._cursor_index = 0
             self.draw_required = True
-        elif key == curses.KEY_END and self.cursor_index < len(self.items) - 1:
-            self.cursor_index = len(self.items) - 1
-            self.draw_required = True
+        elif key == curses.KEY_END:
+            if self._cursor_index != len(self._items) - 1:
+                self._cursor_index = len(self._items) - 1
+                self.draw_required = True
