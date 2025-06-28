@@ -29,10 +29,10 @@ class ComponentWindow(metaclass=abc.ABCMeta):
         self._width = width
         self._top = top
         self._left = left
-        self.title = title
+        self._title = title
         self._focusable = focusable
+        self._window = curses.newwin(0, 0)
         self.draw_required: bool = True
-        self.reset_window()
 
     @abc.abstractmethod
     def draw(self, focused: bool):
@@ -78,6 +78,6 @@ class ComponentWindow(metaclass=abc.ABCMeta):
         if focused:
             self._window.attron(curses.A_BOLD)
         self._window.box()
-        if self.title:
-            self._window.addstr(0, 2, f' {self.title} ')
+        if self._title:
+            self._window.addstr(0, 2, f' {self._title} ')
         self._window.attroff(curses.A_BOLD)
