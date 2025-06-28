@@ -13,7 +13,6 @@ class Example(ComponentWindow):
         self._draw_border(focused)
         self._window.refresh()
         self.draw_required = False
-        print('Drew example obj')
 
 
     def handle_key(self, key: int):
