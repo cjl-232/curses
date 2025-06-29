@@ -46,7 +46,6 @@ class MessageLog(Log, _MessageComponent):
         self._contact = contact
         self._output_log = output_log
         self._scroll_index: int = 0 # Scroll upwards
-        self._message_lines: list[tuple[str, bool]] = list()
         self._loaded_nonces: list[str] = list()
         self.update()
 
@@ -60,7 +59,6 @@ class MessageLog(Log, _MessageComponent):
 
     def set_contact(self, contact: ContactOutputSchema | None) -> bool:
         contact_replaced = super().set_contact(contact)
-        print(contact_replaced)
         if contact_replaced:
             if self._contact is not None:
                 self._title = self._contact.name
@@ -89,14 +87,14 @@ class MessageLog(Log, _MessageComponent):
                     title = f'{self._contact.name}:'
                 else:
                     title = 'You:'
-                self.add_item(output.text, title, output.timestamp)
+                self.add_item(output.text, False, title, output.timestamp)
                 self._loaded_nonces.append(output.nonce)
                 self.draw_required = True
 
     def _refresh(self):
         self._window.clear()
         self._loaded_nonces.clear()
-        self._message_lines.clear()
+        self._item_lines.clear()
         self._scroll_index = 0
         self._load_messages()
 
@@ -133,6 +131,7 @@ class MessageEntry(Entry, _MessageComponent):
                 except NotImplementedError as e:
                     self._output_log.add_item(
                         text=str(e),
+                        cached=False,
                         title='NotImplementedError',
                         timestamp=datetime.now(),
                     )

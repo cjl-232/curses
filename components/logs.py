@@ -25,6 +25,7 @@ class Log(ComponentWindow):
             title=title,
         )
         self._scroll_index: int = 0 # Scroll upwards
+        self._items: list[tuple[str, str | None, datetime | None]] = list()
         self._item_lines: list[tuple[str, bool]] = list()
 
     def draw(self, focused: bool):
@@ -39,7 +40,7 @@ class Log(ComponentWindow):
             visible_lines = self._item_lines[-height:]
         else:
             start = 0 - height - self._scroll_index
-            stop = -self._scroll_index
+            stop = start + height
             visible_lines = self._item_lines[start:stop]
         for index, (line, header) in enumerate(reversed(visible_lines)):
             if header:
@@ -52,11 +53,11 @@ class Log(ComponentWindow):
         self.draw_required = False
 
     def handle_key(self, key: int):
+        height = self._window.getmaxyx()[0] - 2
         if key in settings.key_bindings.up_key_set:
-            self._scroll_index += 1
-            if self._scroll_index >= len(self._item_lines):
-                self._scroll_index = len(self._item_lines) - 1
-            self.draw_required = True
+            if self._scroll_index < len(self._item_lines) - height:
+                self._scroll_index += 1
+                self.draw_required = True
         elif key in settings.key_bindings.down_key_set:
             if self._scroll_index > 0:
                 self._scroll_index -= 1
@@ -65,13 +66,14 @@ class Log(ComponentWindow):
     def add_item(
             self,
             text: str,
+            cached: bool,
             title: str | None = None,
             timestamp: datetime | None = None,
     ):
         width = self._window.getmaxyx()[1] - 2
         if width <= 0:
             return
-        wrapped_text = textwrap.wrap(text, width, drop_whitespace=False)
+        wrapped_text = textwrap.wrap(text, width)
         if not wrapped_text:
             return
         header = ''
@@ -84,7 +86,16 @@ class Log(ComponentWindow):
             self._item_lines += [(header, True)]
             if self._scroll_index != 0:
                 self._scroll_index += 1
+        if not cached:
+            self._items.append((text, title, timestamp))
         self._item_lines += [(x, False) for x in wrapped_text]
         if self._scroll_index != 0:
             self._scroll_index += len(wrapped_text)
         self.draw_required = True
+
+    def reset_window(self):
+        super().reset_window()
+        self._item_lines.clear()
+        self._scroll_index = 0
+        for (text, title, timestamp) in self._items:
+            self.add_item(text, True, title, timestamp)
