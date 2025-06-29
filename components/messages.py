@@ -135,6 +135,7 @@ class MessageEntry(Entry, _MessageComponent):
                         title='NotImplementedError',
                         timestamp=datetime.now(),
                     )
+                curses.curs_set(0)
                 self._input = ''
                 self._cursor_index = 0
                 self.draw_required = True
