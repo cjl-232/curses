@@ -114,6 +114,19 @@ class MessageEntry(Entry, _MessageComponent):
         )
         self._engine = engine
         self._contact = contact
+        self._stored_inputs: dict[int, str] = dict()
         
     def handle_key(self, key: int):
-        super().handle_key(key)
+        if self._contact is not None:
+            super().handle_key(key)
+
+    def set_contact(self, contact: ContactOutputSchema | None) -> bool:
+        if self._contact is not None:
+            self._stored_inputs[self._contact.id] = self._input
+        contact_replaced = super().set_contact(contact)
+        if contact_replaced:
+            if self._contact is not None:
+                self._input = self._stored_inputs.get(self._contact.id, '')
+            self._cursor_index = 0
+            self.draw_required = True
+        return contact_replaced
