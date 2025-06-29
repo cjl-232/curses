@@ -33,8 +33,8 @@ class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
         self._window.keypad(True)
 
         # Determine the number of rows available.
-        height, width = self._window.getmaxyx()
-        items_per_page = height - 3
+        height, width = self._get_internal_size()
+        items_per_page = height - 1
         
         # Work out the current cursor position.
         page_count = math.ceil(len(self._items) / items_per_page)
@@ -47,22 +47,26 @@ class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
         page_items = self._items[start:stop]
 
         # Render the menu.
+        x_pos = 1 + settings.display.left_padding
+        y_pos = 1 + settings.display.top_padding
         for index, item in enumerate(page_items):
             if index == relative_cursor_index and focused:
                 self._window.attron(curses.A_REVERSE)
-                self._window.addnstr(1 + index, 1, item, width - 2)
+                self._window.addnstr(y_pos + index, x_pos, item, width)
                 self._window.attroff(curses.A_REVERSE)
             else:
-                self._window.addnstr(1 + index, 1, item, width - 2)
+                self._window.addnstr(y_pos + index, x_pos, item, width)
         page_label = f'Page {current_page_index + 1} of {page_count}'
-        self._window.addstr(height - 2, 1, page_label, curses.A_ITALIC)
+        self._window.attron(curses.A_ITALIC)
+        self._window.addstr(y_pos + items_per_page, x_pos, page_label)
+        self._window.attroff(curses.A_ITALIC)
 
         # Refresh the window.
         self._window.refresh()
         self.draw_required = False
 
     def handle_key(self, key: int):
-        items_per_page = self._window.getmaxyx()[0] - 3
+        items_per_page = self._get_internal_size()[0] - 1
         page_count = math.ceil(len(self._items) / items_per_page)
         last_page_index = items_per_page * (page_count - 1)
         relative_cursor_index = self._cursor_index % items_per_page

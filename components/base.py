@@ -3,6 +3,8 @@ import curses
 import enum
 import math
 
+from settings import settings
+
 class Direction(enum.Enum):
     VERTICAL = 1
     HORIZONTAL = 2
@@ -81,3 +83,10 @@ class ComponentWindow(metaclass=abc.ABCMeta):
         if self._title:
             self._window.addstr(0, 2, f' {self._title} ')
         self._window.attroff(curses.A_BOLD)
+
+    def _get_internal_size(self) -> tuple[int, int]:
+        display = settings.display
+        height, width = self._window.getmaxyx()
+        height -= 2 + display.top_padding + display.bottom_padding
+        width -= 2 + display.left_padding + display.right_padding
+        return height, width

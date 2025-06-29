@@ -1,6 +1,7 @@
 import curses
 
 from components.base import ComponentWindow, Measurement
+from settings import settings
 
 class Entry(ComponentWindow):
     def __init__(
@@ -29,7 +30,7 @@ class Entry(ComponentWindow):
         curses.curs_set(1 if focused else 0)
 
         # Determine the space available for input, and halt if insufficient.
-        height, width = (x - 2 for x in self._window.getmaxyx())
+        height, width = self._get_internal_size()
         if height <= 0 or width <= 0:
             self._window.refresh()
             self.draw_required = False
@@ -65,17 +66,24 @@ class Entry(ComponentWindow):
         
         # Draw this to the window.
         for i in range(last_row - first_row + 1):
-            self._window.addstr(i + 1, 1, content[i * width:(i + 1) * width])
+            self._window.addstr(
+                i + settings.display.top_padding + 1,
+                1 + settings.display.left_padding,
+                content[i * width:(i + 1) * width],
+            )
 
         # Position the cursor.
-        self._window.move(cursor_row - first_row + 1, cursor_col + 1)
+        self._window.move(
+            cursor_row - first_row + settings.display.top_padding + 1,
+            cursor_col + 1 + settings.display.left_padding,
+        )
 
         # Refresh the window.
         self._window.refresh()
         self.draw_required = False
     
     def handle_key(self, key: int):
-        height, width = (x - 2 for x in self._window.getmaxyx())
+        height, width = self._get_internal_size()
         if key == curses.KEY_UP:
             if self._cursor_index > 0:
                 self._cursor_index -= width

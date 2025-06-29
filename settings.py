@@ -38,6 +38,42 @@ class _DisplaySettingsModel(BaseModel):
             'especially when holding down keys, but may reduce performance.'
         ),
     )
+    top_padding: int = Field(
+        ge=0,
+        default=1,
+        title='Top Padding',
+        description=(
+            'The horizontal padding between the content and top border of '
+            'each window.'
+        ),
+    )
+    bottom_padding: int = Field(
+        ge=0,
+        default=1,
+        title='Bottom Padding',
+        description=(
+            'The horizontal padding between the content and the bottom border '
+            'of each window.'
+        ),
+    )
+    left_padding: int = Field(
+        ge=0,
+        default=1,
+        title='Left Padding',
+        description=(
+            'The horizontal padding between the content and left border of '
+            'each window.'
+        ),
+    )
+    right_padding: int = Field(
+        ge=0,
+        default=1,
+        title='Right Padding',
+        description=(
+            'The horizontal padding between the content and right border of '
+            'each window.'
+        ),
+    )
 
 def _validate_key(key: int | str) -> str:
     if isinstance(key, int):

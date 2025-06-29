@@ -31,7 +31,7 @@ class Log(ComponentWindow):
     def draw(self, focused: bool):
         self._window.erase()
         self._draw_border(focused)
-        height, width = (x - 2 for x in self._window.getmaxyx())
+        height, width = self._get_internal_size()
         if height <= 0 or width <= 0:
             self._window.refresh()
             self.draw_required = False
@@ -42,18 +42,29 @@ class Log(ComponentWindow):
             start = 0 - height - self._scroll_index
             stop = start + height
             visible_lines = self._item_lines[start:stop]
+        x_pos = 1 + settings.display.left_padding
         for index, (line, header) in enumerate(reversed(visible_lines)):
             if header:
                 self._window.attron(curses.A_BOLD)
-                self._window.addnstr(height - index, 1, line, width)
+                self._window.addnstr(
+                    height + settings.display.bottom_padding - index,
+                    x_pos,
+                    line,
+                    width,
+                )
                 self._window.attroff(curses.A_BOLD)
             else:
-                self._window.addnstr(height - index, 1, line, width)
+                self._window.addnstr(
+                    height + settings.display.bottom_padding - index,
+                    x_pos,
+                    line,
+                    width,
+                )
         self._window.refresh()
         self.draw_required = False
 
     def handle_key(self, key: int):
-        height = self._window.getmaxyx()[0] - 2
+        height = self._get_internal_size()[0]
         if key in settings.key_bindings.up_key_set:
             if self._scroll_index < len(self._item_lines) - height:
                 self._scroll_index += 1
@@ -70,7 +81,7 @@ class Log(ComponentWindow):
             title: str | None = None,
             timestamp: datetime | None = None,
     ):
-        width = self._window.getmaxyx()[1] - 2
+        width = self._get_internal_size()[1]
         if width <= 0:
             return
         wrapped_text = textwrap.wrap(text, width)
