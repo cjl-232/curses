@@ -117,13 +117,12 @@ class Entry(ComponentWindow):
                     self._cursor_index = len(self._input)
                 self.draw_required = True
         elif key == 8 or key == curses.KEY_BACKSPACE:
-            head = self._input[:self._cursor_index - 1]
-            tail = self._input[self._cursor_index:]
-            self._input = head + tail
-            self._cursor_index -= 1
-            if self._cursor_index < 0:
-                self._cursor_index = 0
-            self.draw_required = True
+            if self._cursor_index > 0:
+                head = self._input[:self._cursor_index - 1]
+                tail = self._input[self._cursor_index:]
+                self._input = head + tail
+                self._cursor_index -= 1
+                self.draw_required = True
         elif 0 <= key <= 0x10ffff and chr(key).isprintable():
             if self._cursor_index == len(self._input):
                 self._input += chr(key)
