@@ -92,7 +92,7 @@ class MessageLog(Log, _MessageComponent):
                 self.draw_required = True
 
     def _refresh(self):
-        self._window.clear()
+        self._window.erase()
         self._loaded_nonces.clear()
         self._item_lines.clear()
         self._scroll_index = 0
