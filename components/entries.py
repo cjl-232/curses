@@ -81,6 +81,7 @@ class Entry(ComponentWindow, metaclass=abc.ABCMeta):
 
         # Refresh the window.
         self._window.refresh()
+        self.draw_required = False
 
 
 
