@@ -41,22 +41,21 @@ class Log(ComponentWindow):
             start = 0 - height - self._scroll_index
             stop = -self._scroll_index
             visible_lines = self._item_lines[start:stop]
-        for index, (line, header) in enumerate(visible_lines):
+        for index, (line, header) in enumerate(reversed(visible_lines)):
             if header:
                 self._window.attron(curses.A_BOLD)
-                self._window.addnstr(index + 1, 1, line, width)
+                self._window.addnstr(height - index, 1, line, width)
                 self._window.attroff(curses.A_BOLD)
             else:
-                self._window.addnstr(index + 1, 1, line, width)
+                self._window.addnstr(height - index, 1, line, width)
         self._window.refresh()
         self.draw_required = False
 
     def handle_key(self, key: int):
-        height = self._window.getmaxyx()[0] - 2
         if key in settings.key_bindings.up_key_set:
             self._scroll_index += 1
-            if self._scroll_index >= len(self._item_lines) - height:
-                self._scroll_index = len(self._item_lines) - 1 - height
+            if self._scroll_index >= len(self._item_lines):
+                self._scroll_index = len(self._item_lines) - 1
             self.draw_required = True
         elif key in settings.key_bindings.down_key_set:
             if self._scroll_index > 0:
@@ -70,7 +69,7 @@ class Log(ComponentWindow):
             timestamp: datetime | None = None,
     ):
         width = self._window.getmaxyx()[1] - 2
-        if width > 0:
+        if width <= 0:
             return
         wrapped_text = textwrap.wrap(text, width, drop_whitespace=False)
         if not wrapped_text:
@@ -83,4 +82,9 @@ class Log(ComponentWindow):
             header += timestamp.strftime('%Y-%m-%d %H:%M')
         if header:
             self._item_lines += [(header, True)]
+            if self._scroll_index != 0:
+                self._scroll_index += 1
         self._item_lines += [(x, False) for x in wrapped_text]
+        if self._scroll_index != 0:
+            self._scroll_index += len(wrapped_text)
+        self.draw_required = True
