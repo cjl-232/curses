@@ -34,8 +34,8 @@ class Contact(Base):
     )
 
 class MessageType(Enum):
-    sent = 'S'
-    received = 'R'
+    SENT = 'S'
+    RECEIVED = 'R'
 
 class Message(Base):
     __tablename__ = 'messages'

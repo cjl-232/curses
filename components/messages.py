@@ -1,15 +1,14 @@
 import abc
 import curses
-import textwrap
 
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
-from components.base import ComponentWindow, Measurement
+from components.base import Measurement
 from components.entries import Entry
+from components.logs import Log
 from database.models import Message, MessageType
 from database.outputs.schemas import ContactOutputSchema, MessageOutputSchema
-from settings import settings
 
 class _MessageComponent(metaclass=abc.ABCMeta):
     _engine: Engine
@@ -21,7 +20,7 @@ class _MessageComponent(metaclass=abc.ABCMeta):
             return True
         return False
 
-class MessageLog(ComponentWindow, _MessageComponent):
+class MessageLog(Log, _MessageComponent):
     def __init__(
             self,
             engine: Engine,
@@ -46,50 +45,13 @@ class MessageLog(ComponentWindow, _MessageComponent):
         self._message_lines: list[tuple[str, bool]] = list()
         self._loaded_nonces: list[str] = list()
 
-    def draw(self, focused: bool):
-        self._window.erase()
-        self._draw_border(focused)
-        height, width = (x - 2 for x in self._window.getmaxyx())
-        if height <= 0 or width <= 0:
-            self._window.refresh()
-            self.draw_required = False
-            return
-        if self._scroll_index == 0:
-            visible_lines = self._message_lines[-height:]
-        else:
-            start = 0 - height - self._scroll_index
-            stop = -self._scroll_index
-            visible_lines = self._message_lines[start:stop]
-        for index, (line, header) in enumerate(visible_lines):
-            if header:
-                self._window.attron(curses.A_BOLD)
-                self._window.addnstr(index + 1, 1, line, width)
-                self._window.attroff(curses.A_BOLD)
-            else:
-                self._window.addnstr(index + 1, 1, line, width)
-        self._window.refresh()
-        self.draw_required = False
-
     def handle_key(self, key: int):
-        height = self._window.getmaxyx()[0] - 2
-        if key in settings.key_bindings.up_key_set:
-            self._scroll_index += 1
-            if self._scroll_index >= len(self._message_lines) - height:
-                self._scroll_index = len(self._message_lines) - 1 - height
-            self.draw_required = True
-        elif key in settings.key_bindings.down_key_set:
-            self._scroll_index -= 1
-            if self._scroll_index < 0:
-                self._scroll_index = 0
-            self.draw_required = True
-        elif key == curses.KEY_F5:
+        if key == curses.KEY_F5:
             self.update()
         elif key == 281: # SHIFT-F5
             self._refresh()
-
-    def reset_window(self):
-        super().reset_window()
-        self._refresh()
+        else:
+            super().handle_key(key)
 
     def set_contact(self, contact: ContactOutputSchema | None) -> bool:
         contact_replaced = super().set_contact(contact)
@@ -105,35 +67,8 @@ class MessageLog(ComponentWindow, _MessageComponent):
     def update(self):
         self._load_messages()
 
-    def _format_message(
-            self,
-            message: MessageOutputSchema
-        ) -> list[tuple[str, bool]]:
-        width = self._window.getmaxyx()[1] - 2
-        if width <= 0:
-            return []
-        wrapped_text = textwrap.wrap(message.text, width)
-        if wrapped_text:
-            assert self._contact is not None
-            if message.message_type == MessageType.received:
-                name = f'{self._contact.name}:'
-            else:
-                name = 'You:'
-            header = (
-                f'{name: <{max(0, width - 16)}}'
-                f'{message.timestamp.strftime('%Y-%m-%d %H:%M')}'
-            )
-            result = [('', False), (header[:width], True)]
-            for line in wrapped_text:
-                result.append((line, False))
-            return result
-        return []
-
     def _load_messages(self):
         if self._contact is None:
-            return
-        width = self._window.getmaxyx()[1] - 2
-        if width <= 0:
             return
         with Session(self._engine) as session:
             query = (
@@ -144,10 +79,11 @@ class MessageLog(ComponentWindow, _MessageComponent):
             )
             for obj in session.scalars(query):
                 output = MessageOutputSchema.model_validate(obj)
-                for line in self._format_message(output):
-                    if self._scroll_index > 0:
-                        self._scroll_index += 1
-                    self._message_lines.append(line)
+                if output.message_type == MessageType.RECEIVED:
+                    title = f'{self._contact.name}:'
+                else:
+                    title = 'You:'
+                self.add_item(output.text, title, output.timestamp)
                 self._loaded_nonces.append(output.nonce)
                 self.draw_required = True
 
