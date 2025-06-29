@@ -4,6 +4,7 @@ import curses
 
 from components.base import ComponentWindow, MeasurementUnit
 from components.contacts import ContactsMenu
+from components.logs import Log
 from components.messages import MessageEntry, MessageLog
 
 class Example(ComponentWindow):
@@ -32,15 +33,25 @@ from database.outputs.schemas import ContactOutputSchema
 #         session.add(contact)
 #     session.commit()
 
+refreshes = {0: 0, 1: 0, 2: 0, 3: 0}
 
 class Body:
     def __init__(self, stdscr: curses.window):
         with Session(engine) as session:
             contact = ContactOutputSchema.model_validate(session.get(Contact, 1))
         self.component_index = 0
+        output_log = Log(
+            stdscr=stdscr,
+            height=(0.2, MeasurementUnit.PERCENTAGE),
+            width=(1.0, MeasurementUnit.PERCENTAGE),
+            top=(0.8, MeasurementUnit.PERCENTAGE),
+            left=(0, MeasurementUnit.PIXELS),
+            title='Output',
+        )
         message_entry = MessageEntry(
             engine=engine,
             contact=contact,
+            output_log=output_log,
             stdscr=stdscr,
             height=(0.2, MeasurementUnit.PERCENTAGE),
             width=(0.8, MeasurementUnit.PERCENTAGE),
@@ -50,6 +61,7 @@ class Body:
         message_log = MessageLog(
             engine=engine,
             contact=contact,
+            output_log=output_log,
             stdscr=stdscr,
             height=(0.6, MeasurementUnit.PERCENTAGE),
             width=(0.8, MeasurementUnit.PERCENTAGE),
@@ -70,14 +82,7 @@ class Body:
             ),
             message_log,
             message_entry,
-            Example(
-                stdscr=stdscr,
-                height=(0.2, MeasurementUnit.PERCENTAGE),
-                width=(1.0, MeasurementUnit.PERCENTAGE),
-                top=(0.8, MeasurementUnit.PERCENTAGE),
-                left=(0, MeasurementUnit.PIXELS),
-                title='Window 3',
-            ),
+            output_log,
         ]
 
     def run(self, stdscr: curses.window):
@@ -121,6 +126,8 @@ class Body:
     def _draw_components(self):
         for index, component in enumerate(self.components):
             if component.draw_required:
+                refreshes[index] += 1
                 component.draw(index == self.component_index)
 
 curses.wrapper(lambda stdscr: Body(stdscr).run(stdscr))
+print(refreshes)

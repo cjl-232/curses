@@ -44,8 +44,8 @@ class ContactsMenu(PaginatedMenu):
                 self._refresh()
             case curses.KEY_ENTER | 10:
                 contact = self._contacts[self._cursor_index]
-                self._message_entry.set_contact(contact)
                 self._message_log.set_contact(contact)
+                self._message_entry.set_contact(contact)
             case _:
                 super().handle_key(key)
 

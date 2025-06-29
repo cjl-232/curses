@@ -1,6 +1,8 @@
 import abc
 import curses
 
+from datetime import datetime
+
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
@@ -25,6 +27,7 @@ class MessageLog(Log, _MessageComponent):
             self,
             engine: Engine,
             contact: ContactOutputSchema | None,
+            output_log: Log,
             stdscr: curses.window,
             height: Measurement,
             width: Measurement,
@@ -41,9 +44,11 @@ class MessageLog(Log, _MessageComponent):
         )
         self._engine = engine
         self._contact = contact
+        self._output_log = output_log
         self._scroll_index: int = 0 # Scroll upwards
         self._message_lines: list[tuple[str, bool]] = list()
         self._loaded_nonces: list[str] = list()
+        self.update()
 
     def handle_key(self, key: int):
         if key == curses.KEY_F5:
@@ -55,6 +60,7 @@ class MessageLog(Log, _MessageComponent):
 
     def set_contact(self, contact: ContactOutputSchema | None) -> bool:
         contact_replaced = super().set_contact(contact)
+        print(contact_replaced)
         if contact_replaced:
             if self._contact is not None:
                 self._title = self._contact.name
@@ -88,6 +94,7 @@ class MessageLog(Log, _MessageComponent):
                 self.draw_required = True
 
     def _refresh(self):
+        self._window.clear()
         self._loaded_nonces.clear()
         self._message_lines.clear()
         self._scroll_index = 0
@@ -97,6 +104,7 @@ class MessageEntry(Entry, _MessageComponent):
     def __init__(
             self,
             engine: Engine,
+            output_log: Log,
             contact: ContactOutputSchema | None,
             stdscr: curses.window,
             height: Measurement,
@@ -114,11 +122,25 @@ class MessageEntry(Entry, _MessageComponent):
         )
         self._engine = engine
         self._contact = contact
+        self._output_log = output_log
         self._stored_inputs: dict[int, str] = dict()
         
     def handle_key(self, key: int):
         if self._contact is not None:
-            super().handle_key(key)
+            if key == 10 or key == curses.KEY_ENTER:
+                try:
+                    raise NotImplementedError('Messaging not implemented.')
+                except NotImplementedError as e:
+                    self._output_log.add_item(
+                        text=str(e),
+                        title='NotImplementedError',
+                        timestamp=datetime.now(),
+                    )
+                self._input = ''
+                self._cursor_index = 0
+                self.draw_required = True
+            else:
+                super().handle_key(key)
 
     def set_contact(self, contact: ContactOutputSchema | None) -> bool:
         if self._contact is not None:
