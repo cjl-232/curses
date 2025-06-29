@@ -29,7 +29,7 @@ class PaginatedMenu(ComponentWindow, metaclass=abc.ABCMeta):
         self._draw_border(focused)
 
         # Hide the cursor and enable the keypad.
-        curses.curs_set(0)
+        #curses.curs_set(0)
         self._window.keypad(True)
 
         # Determine the number of rows available.
