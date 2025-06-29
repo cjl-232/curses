@@ -58,12 +58,12 @@ class Entry(ComponentWindow, metaclass=abc.ABCMeta):
         elif cursor_row <= (required_rows - 1) - (height - 1):
             first_row = cursor_row
         else:
-            first_row = (required_rows - 1) - (height - 1)
+            first_row = required_rows - (height - 1)
         first_row = max(0, first_row)
         last_row = first_row + (height - 1)
 
         # Extract this from the actual input, padding as required.
-        content = self._input[first_row * width:last_row * width]
+        content = self._input[first_row * width:(last_row + 1) * width]
         if len(content) % width != 0:
             content += ' ' * (width - len(content) % width)
         if len(content) < height * width:
