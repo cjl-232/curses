@@ -1,9 +1,8 @@
-import abc
 import curses
 
 from components.base import ComponentWindow, Measurement
 
-class Entry(ComponentWindow, metaclass=abc.ABCMeta):
+class Entry(ComponentWindow):
     def __init__(
             self,
             stdscr: curses.window,
@@ -42,12 +41,6 @@ class Entry(ComponentWindow, metaclass=abc.ABCMeta):
         # Determine the number of rows required to display the full input.
         required_rows = len(self._input) // width
 
-        # Ensure the cursor is at a valid position.
-        if self._cursor_index < 0:
-            self._cursor_index = 0
-        elif self._cursor_index > len(self._input):
-            self._cursor_index = len(self._input)
-
         # Determine the position of the cursor within the input.
         cursor_col = self._cursor_index % width
         cursor_row = self._cursor_index // width
@@ -80,10 +73,63 @@ class Entry(ComponentWindow, metaclass=abc.ABCMeta):
         # Refresh the window.
         self._window.refresh()
         self.draw_required = False
-
-
-
-        
-
-        
-
+    
+    def handle_key(self, key: int):
+        height, width = (x - 2 for x in self._window.getmaxyx())
+        if key == curses.KEY_UP:
+            if self._cursor_index > 0:
+                self._cursor_index -= width
+                if self._cursor_index < 0:
+                    self._cursor_index = 0
+                self.draw_required = True
+        elif key == curses.KEY_DOWN:
+            if self._cursor_index < len(self._input):
+                self._cursor_index += width
+                if self._cursor_index > len(self._input):
+                    self._cursor_index = len(self._input)
+                self.draw_required = True
+        elif key == curses.KEY_LEFT:
+            if self._cursor_index > 0:
+                self._cursor_index -= 1
+                self.draw_required = True
+        elif key == curses.KEY_RIGHT:
+            if self._cursor_index < len(self._input):
+                self._cursor_index += 1
+                self.draw_required = True
+        elif key == curses.KEY_HOME:
+            if self._cursor_index > 0:
+                self._cursor_index = 0
+                self.draw_required = True
+        elif key == curses.KEY_END:
+            if self._cursor_index < len(self._input):
+                self._cursor_index = len(self._input)
+                self.draw_required = True
+        elif key == curses.KEY_PPAGE:
+            if self._cursor_index > 0:
+                self._cursor_index -= width * height
+                if self._cursor_index < 0:
+                    self._cursor_index = 0
+                self.draw_required = True
+        elif key == curses.KEY_NPAGE:
+            if self._cursor_index < len(self._input):
+                self._cursor_index += width * height
+                if self._cursor_index > len(self._input):
+                    self._cursor_index = len(self._input)
+                self.draw_required = True
+        elif key == 8 or key == curses.KEY_BACKSPACE:
+            head = self._input[:self._cursor_index - 1]
+            tail = self._input[self._cursor_index:]
+            self._input = head + tail
+            self._cursor_index -= 1
+            if self._cursor_index < 0:
+                self._cursor_index = 0
+            self.draw_required = True
+        elif 0 <= key <= 0x10ffff and chr(key).isprintable():
+            if self._cursor_index == len(self._input):
+                self._input += chr(key)
+            else:
+                head = self._input[:self._cursor_index]
+                tail = self._input[self._cursor_index:]
+                self._input = head + chr(key) + tail
+            self._cursor_index += 1
+            self.draw_required = True
