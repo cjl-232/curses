@@ -26,9 +26,6 @@ class Entry(ComponentWindow, metaclass=abc.ABCMeta):
         self._cursor_index = 0
 
     def draw(self, focused: bool):
-        # Clear the window.
-        self._window.clear()
-
         # Set cursor visibility.
         curses.curs_set(1 if focused else 0)
 
