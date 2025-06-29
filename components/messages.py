@@ -1,3 +1,4 @@
+import abc
 import curses
 import textwrap
 
@@ -5,33 +6,14 @@ from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from components.base import ComponentWindow, Measurement
+from components.entries import Entry
 from database.models import Message, MessageType
 from database.outputs.schemas import ContactOutputSchema, MessageOutputSchema
 from settings import settings
 
-class _MessageComponent(ComponentWindow):
-    def __init__(
-            self,
-            engine: Engine,
-            contact: ContactOutputSchema | None,
-            stdscr: curses.window,
-            height: Measurement,
-            width: Measurement,
-            top: Measurement,
-            left: Measurement,
-            title: str | None,
-        ):
-        super().__init__(
-            stdscr=stdscr,
-            height=height,
-            width=width,
-            top=top,
-            left=left,
-            title=title,
-            focusable=True,
-        )
-        self._engine = engine
-        self._contact = contact
+class _MessageComponent(metaclass=abc.ABCMeta):
+    _engine: Engine
+    _contact: ContactOutputSchema | None
 
     def set_contact(self, contact: ContactOutputSchema | None) -> bool:
         if self._contact != contact:
@@ -39,7 +21,7 @@ class _MessageComponent(ComponentWindow):
             return True
         return False
 
-class MessageLog(_MessageComponent):
+class MessageLog(ComponentWindow, _MessageComponent):
     def __init__(
             self,
             engine: Engine,
@@ -51,8 +33,6 @@ class MessageLog(_MessageComponent):
             left: Measurement,
         ):
         super().__init__(
-            engine=engine,
-            contact=contact,
             stdscr=stdscr,
             height=height,
             width=width,
@@ -60,6 +40,8 @@ class MessageLog(_MessageComponent):
             left=left,
             title=contact.name if contact is not None else None,
         )
+        self._engine = engine
+        self._contact = contact
         self._scroll_index: int = 0 # Scroll upwards
         self._message_lines: list[tuple[str, bool]] = list()
         self._loaded_nonces: list[str] = list()
@@ -175,7 +157,7 @@ class MessageLog(_MessageComponent):
         self._scroll_index = 0
         self._load_messages()
 
-class MessageEntry(_MessageComponent):
+class MessageEntry(Entry, _MessageComponent):
     def __init__(
             self,
             engine: Engine,
@@ -187,8 +169,6 @@ class MessageEntry(_MessageComponent):
             left: Measurement,
         ):
         super().__init__(
-            engine=engine,
-            contact=contact,
             stdscr=stdscr,
             height=height,
             width=width,
@@ -196,57 +176,8 @@ class MessageEntry(_MessageComponent):
             left=left,
             title='Message Entry',
         )
-        self._input = ''
-        self._cursor_index: int = 0
-
-    def draw(self, focused: bool):
-        self._window.erase()
-        self._draw_border(focused)
-
-        height, width = (x - 2 for x in self._window.getmaxyx())
-        if height <= 0 or width <= 0:
-            self._window.refresh()
-            self.draw_required = False
-
-        if focused:
-            curses.curs_set(1)
-        else:
-            curses.curs_set(0)
-
-        # Wrap the input text.
-        input_lines = textwrap.wrap(
-            text=self._input,
-            width=width,
-            drop_whitespace=False,
-        )
-        cursor_line, cursor_col = self._get_cursor_position(input_lines, width)
-        print(cursor_line, cursor_col)
-
-        # Determine visible lines and the cursor position.
-        if len(input_lines) < height:
-            visible_lines = input_lines
-        else:
-            start_line = max(0, cursor_line - height + 1)
-            visible_lines = input_lines[start_line:cursor_line + 1]
-        cursor_y = height
-        cursor_y -= cursor_line - (len(input_lines) - len(visible_lines))
-        cursor_x = cursor_col + 1
-        cursor_y = height + 1 - (len(input_lines) - cursor_line)
-        if cursor_col == 0:
-            #cursor_y += 1
-            visible_lines.append('')
-
-        # Draw each line.
-        for index, line in enumerate(reversed(visible_lines)):
-            self._window.addnstr(height - index, 1, line, width)
-
-        # Set the cursor if focused.
-        if focused:
-            self._window.move(cursor_y, cursor_x)
-
-        # Refresh the window.
-        self._window.refresh()
-        self.draw_required = False
+        self._engine = engine
+        self._contact = contact
         
     def handle_key(self, key: int):
         height, width = (x - 2 for x in self._window.getmaxyx())
@@ -311,20 +242,3 @@ class MessageEntry(_MessageComponent):
                 self._input = head + chr(key) + tail
             self._cursor_index += 1
             self.draw_required = True
-
-
-
-    def _get_cursor_position(
-            self,
-            input_lines: list[str],
-            width: int,
-        ) -> tuple[int, int]:
-        remaining_characters = self._cursor_index
-        for index, line in enumerate(input_lines):
-            if remaining_characters < width:
-                return index, remaining_characters
-            else:
-                remaining_characters -= len(line)
-        return len(input_lines), 0
-
-
