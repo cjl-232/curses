@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from database.models import MessageType
-from database.outputs.types import VerificationKey
+from schema_components.types import VerificationKey
 
 class ContactOutputSchema(BaseModel):
     id: int

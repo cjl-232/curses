@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
-from database.inputs.types import ContactName, Key
+from schema_components.types import Base64Key, ContactName
 
 class ContactInputSchema(BaseModel):
     name: ContactName
-    verification_key: Key
+    verification_key: Base64Key

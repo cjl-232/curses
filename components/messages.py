@@ -10,7 +10,7 @@ from components.base import Measurement
 from components.entries import Entry
 from components.logs import Log
 from database.models import Message, MessageType
-from database.outputs.schemas import ContactOutputSchema, MessageOutputSchema
+from database.schemas.outputs import ContactOutputSchema, MessageOutputSchema
 
 class _MessageComponent(metaclass=abc.ABCMeta):
     _engine: Engine
