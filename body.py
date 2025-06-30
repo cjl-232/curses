@@ -26,7 +26,7 @@ from database.models import Base, Contact
 engine = create_engine('sqlite:///contacttest.db')
 Base.metadata.create_all(engine)
 from sqlalchemy.orm import Session
-from database.outputs.schemas import ContactOutputSchema
+from database.schemas.outputs import ContactOutputSchema
 # with Session(engine) as session:
 #     for _ in range(20):
 #         contact = Contact(name=f'Contact #{token_hex(8)}', verification_key=urlsafe_b64encode(token_bytes(32)).decode())
