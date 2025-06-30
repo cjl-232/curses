@@ -7,6 +7,7 @@ from pydantic import AfterValidator, BeforeValidator, Field
 
 from schema_components.validators import (
     validate_key_input,
+    validate_key_list_input,
     validate_key_output,
     validate_signature_input,
     validate_signature_output,
@@ -22,6 +23,16 @@ type Base64Key = Annotated[
         min_length=44,
     ),
     BeforeValidator(validate_key_input),
+]
+
+type Base64KeyList = Annotated[
+    list[str] | None,
+    Field(
+        default=None,
+        title='Base64-Encoded Key List',
+        description='A list of Base64 representations of 32-byte values.',
+    ),
+    BeforeValidator(validate_key_list_input),
 ]
 
 type Base64Signature = Annotated[

@@ -29,6 +29,9 @@ def validate_key_input(value: _KeyInputType) -> str:
     else:
         return urlsafe_b64encode(value.public_bytes_raw()).decode()
 
+def validate_key_list_input(value: list[_KeyInputType]) -> list[str]:
+    return [validate_key_input(x) for x in value]
+
 def validate_key_output(
         value: str,
         key_type: _PrivateKeyType | _PublicKeyType | type[Fernet]

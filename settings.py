@@ -106,12 +106,55 @@ class _KeyBindingsModel(BaseModel):
     @cached_property
     def right_key_set(self):
         return set([curses.KEY_RIGHT] + [ord(x) for x in self.right_keys])
+    
+class _UrlSettingsModel(BaseModel):
+    scheme: str = 'https'
+    subdomain: str | None = Field(default=None)
+    second_level_domain: str = 'cryptcord-server.onrender'
+    top_level_domain: str = 'com'
+    port: int | None = Field(default=None, ge=0)
+    ping_path: str = '/ping'
+    fetch_data_path: str = '/data/fetch'
+    post_exchange_key_path: str = '/data/post/exchange-key'
+    post_message_path: str = '/data/post/message'
 
+    @property
+    def base_url(self) -> str:
+        result = f'{self.scheme}://'
+        if self.subdomain:
+            result += f'{self.subdomain}.'
+        result += f'{self.second_level_domain}.{self.top_level_domain}'
+        if self.port is not None:
+            result += f':{self.port}'
+        return result
+
+    @property
+    def ping_url(self):
+        return self.base_url + self.ping_path
+
+    @property
+    def fetch_data_url(self):
+        return self.base_url + self.fetch_data_path
+
+    @property
+    def post_exchange_key_url(self):
+        return self.base_url + self.post_exchange_key_path
+
+    @property
+    def post_message_url(self):
+        return self.base_url + self.post_message_path
+
+class _ServerSettingsModel(BaseModel):
+    url: _UrlSettingsModel = _UrlSettingsModel()
+    ping_timeout: float = Field(default=1.0, gt=0.0)
+    request_timeout: float = Field(default=5.0, gt=0.0)
+    operations_sleep: float = Field(default=5.0, ge=0.001)
 
 class _SettingsModel(BaseModel):
     display: _DisplaySettingsModel = _DisplaySettingsModel()
     key_bindings: _KeyBindingsModel = _KeyBindingsModel()
     local_database: _DatabaseSettingsModel = _DatabaseSettingsModel()
+    server: _ServerSettingsModel = _ServerSettingsModel()
 
 def _load_settings():
     # Create the settings file if necessary.
