@@ -6,6 +6,8 @@ from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import DateTime, String, Text
 
+def _values_callable(x: type[Enum]):
+    return [i.value for i in x]
 
 class _ContactRelationshipMixin:
     contact_id: Mapped[int] = mapped_column(ForeignKey(column='Contact.id'))
@@ -13,18 +15,22 @@ class _ContactRelationshipMixin:
     @declared_attr
     def contact(cls) -> Mapped['Contact']:
         return relationship(Contact)
-    
+
+
+class _KeyMixin:
+    encoded_bytes: Mapped[str] = mapped_column(String(44), nullable=False)
+
+
 class _TimestampMixin:
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
     )
 
-def _values_callable(x: type[Enum]):
-    return [i.value for i in x]
 
 class Base(DeclarativeBase):
     id: Mapped[int] = mapped_column(primary_key=True)
+
 
 class Contact(Base):
     __tablename__ = 'contacts'
@@ -40,11 +46,14 @@ class Contact(Base):
         nullable=False,
     )
 
+
 class MessageType(Enum):
     SENT = 'S'
     RECEIVED = 'R'
 
+
 class Message(Base, _ContactRelationshipMixin, _TimestampMixin):
+    __tablename__ = 'messages'
     __table_args__ = (
         Index(
             'messages_contact_timestamp_nonce_index',
@@ -58,6 +67,12 @@ class Message(Base, _ContactRelationshipMixin, _TimestampMixin):
     type: Mapped[MessageType] = mapped_column(
         SQLEnum(MessageType, values_callable=_values_callable),
     )
+
+
+class FernetKey(Base, _ContactRelationshipMixin, _KeyMixin, _TimestampMixin):
+    __tablename__ = 'fernet_keys'
+    
+
 # class MessageType(Enum):
 #     SENT = 'S'
 #     RECEIVED = 'R'
