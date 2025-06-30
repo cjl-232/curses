@@ -1,4 +1,5 @@
 from base64 import urlsafe_b64decode, urlsafe_b64encode
+from datetime import datetime, timezone
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -39,3 +40,17 @@ def validate_key_output(
         return key_type.from_public_bytes(raw_bytes)
     else:
         return Fernet(urlsafe_b64encode(raw_bytes))
+    
+def validate_signature_input(value: _BytesLike) -> str:
+    if len(value) != 64:
+        raise ValueError('Value must have an unencoded length of 64 bytes.')
+    return urlsafe_b64encode(value).decode()
+    
+def validate_signature_output(value: str) -> bytes:
+    raw_bytes = urlsafe_b64decode(value)
+    if len(raw_bytes) != 64:
+        raise ValueError('Value must have an unencoded length of 64 bytes.')
+    return raw_bytes
+
+def validate_timestamp(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc)

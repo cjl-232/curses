@@ -1,0 +1,2 @@
+class MissingFernetKey(Exception):
+    pass
