@@ -64,7 +64,7 @@ class Message(Base, _ContactRelationshipMixin, _TimestampMixin):
     )
     text: Mapped[str] = mapped_column(Text(), nullable=False)
     nonce: Mapped[str] = mapped_column(String(32), unique=True)
-    type: Mapped[MessageType] = mapped_column(
+    message_type: Mapped[MessageType] = mapped_column(
         SQLEnum(MessageType, values_callable=_values_callable),
     )
 
