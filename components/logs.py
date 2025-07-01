@@ -15,6 +15,7 @@ class Log(ComponentWindow):
             top: Measurement,
             left: Measurement,
             title: str | None = None,
+            bordered: bool = True,
         ):
         super().__init__(
             stdscr=stdscr,
@@ -23,6 +24,7 @@ class Log(ComponentWindow):
             top=top,
             left=left,
             title=title,
+            bordered=bordered,
         )
         self._scroll_index: int = 0 # Scroll upwards
         self._items: list[tuple[str, str | None, datetime | None]] = list()

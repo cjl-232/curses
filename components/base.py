@@ -24,6 +24,7 @@ class ComponentWindow(metaclass=abc.ABCMeta):
             top: Measurement,
             left: Measurement,
             title: str | None = None,
+            bordered: bool = True,
             focusable: bool = True,
         ):
         self._stdscr = stdscr
@@ -35,6 +36,7 @@ class ComponentWindow(metaclass=abc.ABCMeta):
         self._focusable = focusable
         self._window = curses.newwin(0, 0)
         self.draw_required: bool = True
+        self._bordered = bordered
 
     @abc.abstractmethod
     def draw(self, focused: bool):
@@ -79,7 +81,8 @@ class ComponentWindow(metaclass=abc.ABCMeta):
     def _draw_border(self, focused: bool):
         if focused:
             self._window.attron(curses.A_BOLD)
-        self._window.box()
+        if self._bordered:
+            self._window.box()
         if self._title:
             self._window.addstr(0, 2, f' {self._title} ')
         self._window.attroff(curses.A_BOLD)
@@ -87,6 +90,9 @@ class ComponentWindow(metaclass=abc.ABCMeta):
     def _get_internal_size(self) -> tuple[int, int]:
         display = settings.display
         height, width = self._window.getmaxyx()
-        height -= 2 + display.top_padding + display.bottom_padding
-        width -= 2 + display.left_padding + display.right_padding
+        height -= display.top_padding + display.bottom_padding
+        width -= display.left_padding + display.right_padding
+        if self._bordered:
+            height -= 2
+            width -= 2
         return height, width
