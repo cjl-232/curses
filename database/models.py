@@ -10,7 +10,7 @@ def _values_callable(x: type[Enum]):
     return [i.value for i in x]
 
 class _ContactRelationshipMixin:
-    contact_id: Mapped[int] = mapped_column(ForeignKey(column='Contact.id'))
+    contact_id: Mapped[int] = mapped_column(ForeignKey(column='contacts.id'))
 
     @declared_attr
     def contact(cls) -> Mapped['Contact']:
@@ -60,7 +60,7 @@ class Message(Base, _ContactRelationshipMixin, _TimestampMixin):
             'contact_id',
             'timestamp',
             'nonce',
-        )
+        ),
     )
     text: Mapped[str] = mapped_column(Text(), nullable=False)
     nonce: Mapped[str] = mapped_column(String(32), unique=True)

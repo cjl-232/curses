@@ -148,7 +148,7 @@ class _ServerSettingsModel(BaseModel):
     url: _UrlSettingsModel = _UrlSettingsModel()
     ping_timeout: float = Field(default=1.0, gt=0.0)
     request_timeout: float = Field(default=5.0, gt=0.0)
-    operations_sleep: float = Field(default=5.0, ge=0.001)
+    fetch_interval: float = Field(default=5.0, gt=0.0)
 
 class _SettingsModel(BaseModel):
     display: _DisplaySettingsModel = _DisplaySettingsModel()

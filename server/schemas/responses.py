@@ -13,13 +13,16 @@ class _BaseResponseSchema(BaseModel):
     status: str
     message: str
 
+class _NonceMixin:
+    nonce: str = Field(pattern='^(?:[0-9a-fA-F]{2})+$')
+
 
 class _TimestampMixin:
     timestamp: Timestamp
 
 
-class _PostMessageResponseData(BaseModel, _TimestampMixin):
-    nonce: str = Field(pattern='^(?:[0-9a-fA-F]{2})+$')
+class _PostMessageResponseData(BaseModel, _NonceMixin, _TimestampMixin):
+    pass
 
 
 class _PostKeyResponseData(BaseModel, _TimestampMixin):
@@ -83,7 +86,7 @@ class _FetchResponseExchangeKey(_FetchResponseElement):
         return self.sent_exchange_key.public_bytes_raw()
 
 
-class _FetchResponseMessage(_FetchResponseElement):
+class _FetchResponseMessage(_FetchResponseElement, _NonceMixin):
     encrypted_text: str
 
     def _get_data(self) -> bytes:
