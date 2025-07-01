@@ -14,7 +14,7 @@ class Log(ComponentWindow):
             width: Measurement,
             top: Measurement,
             left: Measurement,
-            title: str | None,
+            title: str | None = None,
         ):
         super().__init__(
             stdscr=stdscr,
