@@ -55,16 +55,19 @@ if __name__ == '__main__':
                     ]),
                     width=LayoutMeasure([
                         (50, LayoutUnit.PERCENTAGE),
+                        (20, LayoutUnit.CHARS),
                     ]),
                     top=LayoutMeasure([
                         (10, LayoutUnit.CHARS),
                     ]),
                     left=LayoutMeasure([
-                        (20, LayoutUnit.CHARS),
+                        (50, LayoutUnit.PERCENTAGE),
+                        (-20, LayoutUnit.CHARS),
                     ]),
                 ),
                 padding=Padding(1, 2, 3),
                 title='Test Menu',
+                footer='Ctrl-A: Add Contact'
             )
         )
         manager.run()

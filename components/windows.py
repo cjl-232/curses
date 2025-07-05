@@ -86,7 +86,7 @@ class ManagedWindow(metaclass=abc.ABCMeta):
         self.bordered = bordered
         self.focusable = focusable
         self.draw_required = False
-        self.window = curses.newwin(0, 0, 0, 0)
+        self.window = curses.newwin(1, 1)
             
     @abc.abstractmethod
     def draw(self, focused: bool):
@@ -161,9 +161,7 @@ class WindowManager:
     ) -> None:
         self.stdscr = stdscr
         self.stdscr.nodelay(True)
-        if windows is None:
-            windows = []
-        self.windows = windows
+        self.windows = windows or []
         self.focus_index = 0
 
     def run(self):
