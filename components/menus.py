@@ -2,31 +2,28 @@ import abc
 import curses
 import math
 
-from components.windows import LayoutMeasure, ManagedWindow, Padding
+from components.windows import Layout, ManagedWindow, Padding
 from settings import settings
 
 class PaginatedMenu(ManagedWindow, metaclass=abc.ABCMeta):
     def __init__(
             self,
             items: list[str],
-            height: LayoutMeasure,
-            width: LayoutMeasure,
-            top: LayoutMeasure,
-            left: LayoutMeasure,
+            layout: Layout,
             padding: Padding = Padding(),
             title: str | None = None,
+            footer: str | None = None,
         ) -> None:
-        super().__init__(height, width, top, left, padding, title, True, True)
+        super().__init__(layout, padding, title, footer, True, True)
         self.items = items
         self.cursor_index = 0
 
     def draw(self, focused: bool):
         # Erase the window and redraw the border.
         self.window.erase()
-        self._draw_border(focused)
 
         # Hide the cursor and enable the keypad.
-        #curses.curs_set(0)
+        curses.curs_set(0)
         self.window.keypad(True)
 
         # Determine the number of rows available.
@@ -34,12 +31,12 @@ class PaginatedMenu(ManagedWindow, metaclass=abc.ABCMeta):
         items_per_page = height - 1
 
         # Terminate if space is insufficient.
-        vertical_padding = self.padding.vertical_sum
-        horizontal_padding = self.padding.horizontal_sum
-        if height <= vertical_padding + 1 or width <= horizontal_padding:
+        if height <= 1 or width <= 0:
             self.window.refresh()
-            self.draw_required = False
             return
+        
+        # Otherwise, draw the border.
+        self._draw_external(focused)
         
         # Work out the current cursor position.
         page_count = math.ceil(len(self.items) / items_per_page)
@@ -68,7 +65,6 @@ class PaginatedMenu(ManagedWindow, metaclass=abc.ABCMeta):
 
         # Refresh the window.
         self.window.refresh()
-        self.draw_required = False
 
     def handle_key(self, key: int):
         items_per_page = self._get_internal_size()[0] - 1
@@ -77,41 +73,41 @@ class PaginatedMenu(ManagedWindow, metaclass=abc.ABCMeta):
         relative_cursor_index = self.cursor_index % items_per_page
         if key in settings.key_bindings.up_key_set:
             if relative_cursor_index != 0:
-                self._cursor_index -= 1
-                if self._cursor_index < 0:
-                    self._cursor_index = len(self.items) - 1
+                self.cursor_index -= 1
+                if self.cursor_index < 0:
+                    self.cursor_index = len(self.items) - 1
             else:
-                self._cursor_index += items_per_page - 1
-                if self._cursor_index >= len(self.items):
-                    self._cursor_index = len(self.items) - 1
+                self.cursor_index += items_per_page - 1
+                if self.cursor_index >= len(self.items):
+                    self.cursor_index = len(self.items) - 1
             self.draw_required = True
         elif key in settings.key_bindings.down_key_set:
             if relative_cursor_index != items_per_page - 1:
-                self._cursor_index += 1
-                if self._cursor_index >= len(self.items):
-                    self._cursor_index = 0
+                self.cursor_index += 1
+                if self.cursor_index >= len(self.items):
+                    self.cursor_index = 0
             else:
-                self._cursor_index = 0
+                self.cursor_index = 0
             self.draw_required = True
         elif key in settings.key_bindings.left_key_set:
-            self._cursor_index -= items_per_page
-            if self._cursor_index < 0:
-                self._cursor_index = last_page_index + relative_cursor_index
-                if self._cursor_index >= len(self.items):
-                    self._cursor_index = len(self.items) - 1
+            self.cursor_index -= items_per_page
+            if self.cursor_index < 0:
+                self.cursor_index = last_page_index + relative_cursor_index
+                if self.cursor_index >= len(self.items):
+                    self.cursor_index = len(self.items) - 1
             self.draw_required = True
         elif key in settings.key_bindings.right_key_set:
-            self._cursor_index += items_per_page
-            if self._cursor_index >= len(self.items):
-                if self._cursor_index - items_per_page >= last_page_index:
-                    self._cursor_index = relative_cursor_index
+            self.cursor_index += items_per_page
+            if self.cursor_index >= len(self.items):
+                if self.cursor_index - items_per_page >= last_page_index:
+                    self.cursor_index %= items_per_page
                 else:
-                    self._cursor_index = len(self.items) - 1
+                    self.cursor_index = len(self.items) - 1
             self.draw_required = True
-        elif key == curses.KEY_HOME and self._cursor_index != 0:
-            self._cursor_index = 0
+        elif key == curses.KEY_HOME and self.cursor_index != 0:
+            self.cursor_index = 0
             self.draw_required = True
         elif key == curses.KEY_END:
-            if self._cursor_index != len(self.items) - 1:
-                self._cursor_index = len(self.items) - 1
+            if self.cursor_index != len(self.items) - 1:
+                self.cursor_index = len(self.items) - 1
                 self.draw_required = True

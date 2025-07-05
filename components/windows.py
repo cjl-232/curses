@@ -1,6 +1,7 @@
 import abc
 import curses
 
+from dataclasses import dataclass
 from enum import auto, Enum
 
 class LayoutUnit(Enum):
@@ -33,6 +34,14 @@ class LayoutMeasure:
         return result
 
 
+@dataclass
+class Layout:
+    height: LayoutMeasure
+    width: LayoutMeasure
+    top: LayoutMeasure
+    left: LayoutMeasure
+
+
 class Padding:
     def __init__(self, *args: int)-> None:
         match len(args):
@@ -57,27 +66,23 @@ class Padding:
         return self.left + self.right
 
 
-type _PaddingType = tuple[LayoutMeasure, LayoutMeasure, LayoutMeasure, LayoutMeasure]
-
-
 class ManagedWindow(metaclass=abc.ABCMeta):
     def __init__(
             self,
-            height: LayoutMeasure,
-            width: LayoutMeasure,
-            top: LayoutMeasure,
-            left: LayoutMeasure,
+            layout: Layout,
             padding: Padding = Padding(),
             title: str | None = None,
+            footer: str | None = None,
             bordered: bool = True,
             focusable: bool = True,
     ) -> None:
-        self.height = height
-        self.width = width
-        self.top = top
-        self.left = left
+        self.height = layout.height
+        self.width = layout.width
+        self.top = layout.top
+        self.left = layout.left
         self.padding = padding
         self.title = title
+        self.footer = footer
         self.bordered = bordered
         self.focusable = focusable
         self.draw_required = False
@@ -90,7 +95,7 @@ class ManagedWindow(metaclass=abc.ABCMeta):
 
         This function should begin by calling self._window.erase unless it
         is certain nothing will need to be erased. It should usually call
-        self._draw_border, and should always end with a refresh.
+        self._draw_external, and should always end with a refresh.
         """
 
     @abc.abstractmethod
@@ -121,19 +126,22 @@ class ManagedWindow(metaclass=abc.ABCMeta):
         height = min(self.height.calc(parent_height), parent_height - top)
         width = min(self.width.calc(parent_width), parent_width - left)
         if top < 0 or left < 0 or height <= 0 or width <= 0:
-            self.window = curses.newwin(0, 0, 0, 0)
+            self.window = curses.newwin(1, 1)
         else:
             self.window = curses.newwin(height, width, top, left)
         self.draw_required = True
 
-    def _draw_border(self, focused: bool):
+    def _draw_external(self, focused: bool):
         if focused:
             self.window.attron(curses.A_BOLD)
         if self.bordered:
             self.window.box()
-        if self.title:
-            self.window.addnstr(0, 2, f' {self.title} ', len(self.title))
+        height, width = self.window.getmaxyx()
+        if self.title and width > 4:
+            self.window.addnstr(0, 2, f' {self.title} ', width - 4)
         self.window.attroff(curses.A_BOLD)
+        if self.footer and width > 4:
+            self.window.addnstr(height - 1, 2, f' {self.footer} ', width - 4)
 
     def _get_internal_size(self) -> tuple[int, int]:
         height, width = self.window.getmaxyx()
@@ -149,38 +157,48 @@ class WindowManager:
     def __init__(
             self,
             stdscr: curses.window,
-            windows: list[ManagedWindow],
+            windows: list[ManagedWindow] | None = None,
     ) -> None:
         self.stdscr = stdscr
+        self.stdscr.nodelay(True)
+        if windows is None:
+            windows = []
         self.windows = windows
         self.focus_index = 0
-        
-    def draw_windows(self):
-        for index, window in enumerate(self.windows):
-            if window.draw_required:
-                window.draw(index == self.focus_index)
-            window.draw_required = False
 
-    def handle_key(self, key: int):
-        match key:
-            case 9:
-                for _ in range(len(self.windows)):
-                    self.focus_index += 1
-                    if self.focus_index >= len(self.windows):
-                        self.focus_index = 0
-                    if self.windows[self.focus_index].focusable:
-                        break
-            case curses.KEY_BTAB:
-                for _ in range(len(self.windows)):
-                    self.focus_index -= 1
-                    if self.focus_index < 0:
-                        self.focus_index = max(0, len(self.windows) - 1)
-                    if self.windows[self.focus_index].focusable:
-                        break
-            case curses.KEY_RESIZE:
-                self.stdscr.erase()
-                for window in self.windows:
-                    window.place(self.stdscr)
-            case _:
-                if self.windows:
-                    self.windows[self.focus_index].handle_key(key)
+    def run(self):
+        self.stdscr.erase()
+        for window in self.windows:
+            window.place(self.stdscr)
+        self.stdscr.refresh()
+        while True:
+            for index, window in enumerate(self.windows):
+                if window.draw_required:
+                    window.draw(index == self.focus_index)
+                window.draw_required = False
+            key = self.stdscr.getch()
+            match key:
+                case 9:
+                    for _ in range(len(self.windows)):
+                        self.focus_index += 1
+                        if self.focus_index >= len(self.windows):
+                            self.focus_index = 0
+                        if self.windows[self.focus_index].focusable:
+                            break
+                case curses.KEY_BTAB:
+                    for _ in range(len(self.windows)):
+                        self.focus_index -= 1
+                        if self.focus_index < 0:
+                            self.focus_index = max(0, len(self.windows) - 1)
+                        if self.windows[self.focus_index].focusable:
+                            break
+                case curses.KEY_RESIZE:
+                    self.stdscr.erase()
+                    for window in self.windows:
+                        window.place(self.stdscr)
+                    self.stdscr.refresh()
+                case 27:  # Esc
+                    break
+                case _:
+                    if self.windows:
+                        self.windows[self.focus_index].handle_key(key)
