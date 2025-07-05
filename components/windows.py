@@ -14,9 +14,11 @@ type _LayoutElement = tuple[int | float, LayoutUnit]
 class LayoutMeasure:
     def __init__(
             self,
-            elements: _LayoutElement | list[_LayoutElement],
+            elements: _LayoutElement | list[_LayoutElement] | None = None,
         ) -> None:
-        if not isinstance(elements, list):
+        if elements is None:
+            elements = []
+        elif not isinstance(elements, list):
             elements = [elements]
         self.elements = elements
 
@@ -31,6 +33,33 @@ class LayoutMeasure:
         return result
 
 
+class Padding:
+    def __init__(self, *args: int)-> None:
+        match len(args):
+            case 0:
+                values = (0,) * 4
+            case 1:
+                values = (args[0],) * 4
+            case 2:
+                values = (args[0],) * 2 + (args[1],) * 2
+            case 3:
+                values = (args[0], args[2],) + (args[1],) * 2
+            case _:
+                values = args[:4]
+        self.top, self.bottom, self.left, self.right = values
+    
+    @property
+    def vertical_sum(self) -> int:
+        return self.top + self.bottom
+    
+    @property
+    def horizontal_sum(self) -> int:
+        return self.left + self.right
+
+
+type _PaddingType = tuple[LayoutMeasure, LayoutMeasure, LayoutMeasure, LayoutMeasure]
+
+
 class ManagedWindow(metaclass=abc.ABCMeta):
     def __init__(
             self,
@@ -38,6 +67,7 @@ class ManagedWindow(metaclass=abc.ABCMeta):
             width: LayoutMeasure,
             top: LayoutMeasure,
             left: LayoutMeasure,
+            padding: Padding = Padding(),
             title: str | None = None,
             bordered: bool = True,
             focusable: bool = True,
@@ -46,6 +76,7 @@ class ManagedWindow(metaclass=abc.ABCMeta):
         self.width = width
         self.top = top
         self.left = left
+        self.padding = padding
         self.title = title
         self.bordered = bordered
         self.focusable = focusable
@@ -103,6 +134,15 @@ class ManagedWindow(metaclass=abc.ABCMeta):
         if self.title:
             self.window.addnstr(0, 2, f' {self.title} ', len(self.title))
         self.window.attroff(curses.A_BOLD)
+
+    def _get_internal_size(self) -> tuple[int, int]:
+        height, width = self.window.getmaxyx()
+        height -= self.padding.vertical_sum
+        width -= self.padding.horizontal_sum
+        if self.bordered:
+            height -= 2
+            width -= 2
+        return max(0, height), max(0, width)
 
 
 class WindowManager:
