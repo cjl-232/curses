@@ -48,10 +48,10 @@ class Prompt(ManagedWindow):
             visible_input = node.input[-width + 1:]
 
         # Draw the prompt text and input to the screen.
-        y_pos = self.padding.top + height
+        y_pos = self.padding.top + height - 1
         x_pos = self.padding.left
         self.window.addstr(y_pos, x_pos, visible_input)
-        self.window.addnstr(y_pos - 2, x_pos, node.message, width)
+        self.window.addnstr(y_pos - 1, x_pos, node.message, width)
         self.window.move(y_pos, x_pos + len(node.input))
 
         # Refresh the window.
@@ -78,7 +78,7 @@ class Prompt(ManagedWindow):
                 else:
                     self.draw_required = True
             case _:
-                if 0 <= key <= 0x10ffff and chr(key).isprintable():
+                if 0 <= key <= 0x10ffff and chr(key).isascii():
                     node.input += chr(key)
                     self.draw_required = True
         return State.PROMPT_ACTIVE
