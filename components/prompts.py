@@ -1,147 +1,269 @@
-import abc
-import binascii
 import curses
 
-from base64 import urlsafe_b64decode
+from dataclasses import dataclass
 
-from components.base import Component
-from settings import settings
+from states import State
+from styling import Layout, LayoutMeasure, LayoutUnit, Padding
+from windows import ManagedWindow
 
-class Prompt(Component, metaclass=abc.ABCMeta):
-    def __init__(self, message: str):
-        self.message = message
-        self.errors: list[str] = list()
+_fullscreen_layout = Layout(
+    height=LayoutMeasure((100, LayoutUnit.PERCENTAGE)),
+    width=LayoutMeasure((100, LayoutUnit.PERCENTAGE)),
+    top=LayoutMeasure((0, LayoutUnit.CHARS)),
+    left=LayoutMeasure((0, LayoutUnit.CHARS)),
+)
 
-class ChoicePrompt(Prompt):
-    def __init__(self, message: str, choices: list[str]):
-        super().__init__(message)
-        if len(choices) == 0:
-            raise ValueError('At least one choice is required per prompt.')
-        elif len(choices) > 9:
-            raise ValueError('No more than 9 choices are allowed per prompt.')
-        self.choices = choices
+@dataclass
+class PromptNode:
+    name: str
+    message: str
+    input: str = ''
 
-    def run(self, stdscr: curses.window) -> int | None:
-        curses.curs_set(0)
-        stdscr.nodelay(False)
-        while True:
-            stdscr.clear()
-            height = stdscr.getmaxyx()[0]
-            if height < len(self.choices) + 1:
-                stdscr.addstr(height - 1, 0, 'Insufficient terminal height.')
-                stdscr.refresh()
-                continue
-            top = height - 1 - len(self.choices)
-            stdscr.addstr(top, 0, self.message)
-            for idx, choice in enumerate(self.choices):
-                stdscr.addstr(top + 1 + idx, 0, f'{idx + 1}. {choice}')
-            stdscr.refresh()
-            key = stdscr.getch()
-            if 49 <= key < 49 + len(self.choices):
-                return int(chr(key))
-            elif key == 27:
-                return None
-            
-class InputPrompt(Prompt):
-    def __init__(self, message: str, max_length: int | None = None):
-        super().__init__(message)
-        self.entry = ''
-        self.message = message
-        if max_length is not None and max_length < 1:
-            raise ValueError('Max length must be positive.')
-        self.max_length = max_length
+class Prompt(ManagedWindow):
+    def __init__(self, node: PromptNode, *followup_nodes: PromptNode) -> None:
+        super().__init__(_fullscreen_layout, Padding(1), bordered=False)
+        self.nodes = [node] + list(followup_nodes)
+        self.node_index = 0
 
-    def run(self, stdscr: curses.window) -> str | None:
-        curses.curs_set(1)
-        while True:
-            stdscr.clear()
-            stdscr.nodelay(settings.display.await_inputs == False)
-            height = stdscr.getmaxyx()[0]
-            y_pos = height - 1
-            stdscr.move(y_pos, len(self.entry))
-            stdscr.addstr(y_pos, 0, self.entry)
-            for error in self.errors[::-1]:
-                y_pos -= 1
-                stdscr.addstr(y_pos, 0, error)
-            y_pos -= 1
-            stdscr.addstr(y_pos, 0, self.message)
-            stdscr.move(height - 1, len(self.entry))
-            stdscr.refresh()
-            key = stdscr.getch()
-            match key:
-                case -1:
-                    pass
-                case 8 | curses.KEY_BACKSPACE:
-                    self.entry = self.entry[:-1]
-                case 10:
-                    return self.entry.rstrip()
-                case 27:
-                    return None
-                case _:
-                    if chr(key).isprintable():
-                        self.entry += chr(key)
-            if self.max_length is not None:
-                self.entry = self.entry[:self.max_length]
+    def draw(self, focused: bool = True):
+        # Determine the current node.
+        node = self.nodes[self.node_index]
 
-class Base64Prompt(Prompt):
-    def __init__(
-            self,
-            message: str,
-            max_length: int,
-            n_bytes: int | None = None,
-        ):
-        super().__init__(message)
-        self.input_prompt = InputPrompt(message, max_length)
-        if n_bytes is not None and n_bytes <= 0:
-            raise ValueError('Required bytes length must be positive.')
-        self.n_bytes = n_bytes
+        # Set cursor visibility.
+        curses.curs_set(1 if focused else 0)
 
-    def run(self, stdscr: curses.window) -> bytes | None:
-        while True:
-            input = self.input_prompt.run(stdscr)
-            if input is None:
-                return None
-            try:
-                self.input_prompt.errors = self.errors
-                raw_bytes = urlsafe_b64decode(input)
-                if self.n_bytes is None or len(raw_bytes) == self.n_bytes:
-                    return raw_bytes
+        # Determine the space available for input, and halt if insufficient.
+        height, width = self._get_internal_size()
+        if height <= 3 or width <= 0:
+            self.window.refresh()
+            self.draw_required = False
+            return
+
+        # Determine the visible part of the input.
+        if width <= 1:
+            visible_input = ''
+        else:
+            visible_input = node.input[-width + 1:]
+
+        # Draw the prompt text and input to the screen.
+        y_pos = self.padding.top + height
+        x_pos = self.padding.left
+        self.window.addstr(y_pos, x_pos, visible_input)
+        self.window.addnstr(y_pos - 2, x_pos, node.message, width)
+        self.window.move(y_pos, x_pos + len(node.input))
+
+        # Refresh the window.
+        self.window.refresh()
+        self.draw_required = False
+    
+    def handle_key(self, key: int) -> State:
+        node = self.nodes[self.node_index]
+        match key:
+            case 8 | curses.KEY_BACKSPACE:
+                node.input = node.input[:-1]
+                self.draw_required = True
+            case 10 | curses.KEY_ENTER:
+                self.node_index += 1
+                if self.node_index >= len(self.nodes):
+                    return State.PROMPT_SUBMITTED
+            case 27:  # Esc
+                node.input = ''
+                self.node_index -= 1
+                if self.node_index < 0:
+                    return State.PROMPT_CANCELLED
                 else:
-                    error_message = (
-                        f'Value must have an unencoded length of '
-                        f'{self.n_bytes} bytes.'
-                    )
-                    self.input_prompt.errors.append(error_message)
-            except binascii.Error:
-                self.input_prompt.errors.append('Value must be valid Base64.')
+                    self.draw_required = True
+            case _:
+                if 0 <= key <= 0x10ffff and chr(key).isprintable():
+                    node.input += chr(key)
+                    self.draw_required = True
+        return State.PROMPT_ACTIVE
 
-class HexadecimalPrompt(Prompt):
-    def __init__(
-            self,
-            message: str,
-            max_length: int,
-            n_bytes: int | None = None,
-        ):
-        super().__init__(message)
-        self.input_prompt = InputPrompt(message, max_length)
-        if n_bytes is not None and n_bytes <= 0:
-            raise ValueError('Required bytes length must be positive.')
-        self.n_bytes = n_bytes
+# # TODO SCRAP THIS REPLACE WITH CUSTOM TYPE, NOT LOG. BOTTOM UP IS NOT HELPFUL
 
-    def run(self, stdscr: curses.window) -> bytes | None:
-        while True:
-            input = self.input_prompt.run(stdscr)
-            if input is None:
-                return None
-            try:
-                raw_bytes = bytes.fromhex(input)
-                if self.n_bytes is None or len(raw_bytes) == self.n_bytes:
-                    return raw_bytes
-                else:
-                    error_message = (
-                        f'Value must have an unencoded length of '
-                        f'{self.n_bytes} bytes.'
-                    )
-                    self.input_prompt.errors = [error_message]
-            except ValueError:
-                self.input_prompt.errors = ['Value must be valid hexadecimal.']
+# import abc
+# import curses
+
+# from enum import StrEnum
+# from typing import Any
+
+# from components.base import MeasurementUnit
+# from components.logs import Log
+
+# class Prompt(Log, metaclass=abc.ABCMeta):
+#     def __init__(
+#             self,
+#             stdscr: curses.window,
+#             message: str,
+#             title: str | None = None,
+#         ):
+#         super().__init__(
+#             stdscr=stdscr,
+#             height=(1.0, MeasurementUnit.PERCENTAGE),
+#             width=(1.0, MeasurementUnit.PERCENTAGE),
+#             top=(0, MeasurementUnit.PIXELS),
+#             left=(0, MeasurementUnit.PIXELS),
+#             bordered=False,
+#             title=title,
+#         )
+#         self._message = message
+#         self._errors: list[str] = list()
+
+#     @abc.abstractmethod
+#     def run(self) -> Any:
+#         pass
+
+
+# class ChoicePrompt(Prompt):
+#     def __init__(
+#             self,
+#             stdscr: curses.window,
+#             message: str,
+#             choices: type[StrEnum],
+#             title: str | None = None,
+#         ):
+#         super().__init__(stdscr, message, title)
+#         if len(choices) == 0:
+#             raise ValueError('At least one choice is required per prompt.')
+#         elif len(choices) > 9:
+#             raise ValueError('No more than 9 choices are allowed per prompt.')
+#         self.add_item(message, False, title)
+#         for index, choice in enumerate(choices):
+#             self.add_item(f'{index}. {choice.value}', False)
+#         self._choices = [x.value for x in choices]
+#         print(self._item_lines)
+
+#     def run(self) -> str | None:
+#         curses.curs_set(0)
+#         self._stdscr.keypad(True)
+#         self._stdscr.nodelay(False)
+#         self.reset_window()
+#         while True:
+#             if self.draw_required:
+#                 self.draw(True)
+#             key = self._window.getch()
+#             if 49 <= key < 49 + len(self._choices):
+#                 return self._choices[int(chr(key)) - 1]
+#             elif key == 27:
+#                 return None
+#             elif key == curses.KEY_RESIZE:
+#                 self.reset_window()
+#             else:
+#                 super().handle_key(key)
+    
+#     def reset_window(self):
+#         super().reset_window()
+#         height = self._get_internal_size()[0]
+#         self._scroll_index = max(0, height - len(self._item_lines))
+        
+# class SignatureKeyMethodPrompt(ChoicePrompt):
+#     def __init__(self, stdscr: curses.window):
+#         super().__init__(stdscr, 'Message here', self.Choices, 'Title here')
+
+#     class Choices(StrEnum):
+#         BASE64 = 'Base64 Input'
+#         HEXADECIMAL = 'Hexadecimal Input'
+#         FROM_PEM_FILE = 'From PEM-encoded File'
+# # class InputPrompt(Prompt):
+# #     def __init__(self, message: str, max_length: int | None = None):
+# #         super().__init__(message)
+# #         self.entry = ''
+# #         self.message = message
+# #         if max_length is not None and max_length < 1:
+# #             raise ValueError('Max length must be positive.')
+# #         self.max_length = max_length
+
+# #     def run(self, stdscr: curses.window) -> str | None:
+# #         curses.curs_set(1)
+# #         while True:
+# #             stdscr.clear()
+# #             stdscr.nodelay(settings.display.await_inputs == False)
+# #             height = stdscr.getmaxyx()[0]
+# #             y_pos = height - 1
+# #             stdscr.move(y_pos, len(self.entry))
+# #             stdscr.addstr(y_pos, 0, self.entry)
+# #             for error in self.errors[::-1]:
+# #                 y_pos -= 1
+# #                 stdscr.addstr(y_pos, 0, error)
+# #             y_pos -= 1
+# #             stdscr.addstr(y_pos, 0, self.message)
+# #             stdscr.move(height - 1, len(self.entry))
+# #             stdscr.refresh()
+# #             key = stdscr.getch()
+# #             match key:
+# #                 case -1:
+# #                     pass
+# #                 case 8 | curses.KEY_BACKSPACE:
+# #                     self.entry = self.entry[:-1]
+# #                 case 10:
+# #                     return self.entry.rstrip()
+# #                 case 27:
+# #                     return None
+# #                 case _:
+# #                     if chr(key).isprintable():
+# #                         self.entry += chr(key)
+# #             if self.max_length is not None:
+# #                 self.entry = self.entry[:self.max_length]
+
+# # class Base64Prompt(Prompt):
+# #     def __init__(
+# #             self,
+# #             message: str,
+# #             max_length: int,
+# #             n_bytes: int | None = None,
+# #         ):
+# #         super().__init__(message)
+# #         self.input_prompt = InputPrompt(message, max_length)
+# #         if n_bytes is not None and n_bytes <= 0:
+# #             raise ValueError('Required bytes length must be positive.')
+# #         self.n_bytes = n_bytes
+
+# #     def run(self, stdscr: curses.window) -> bytes | None:
+# #         while True:
+# #             input = self.input_prompt.run(stdscr)
+# #             if input is None:
+# #                 return None
+# #             try:
+# #                 self.input_prompt.errors = self.errors
+# #                 raw_bytes = urlsafe_b64decode(input)
+# #                 if self.n_bytes is None or len(raw_bytes) == self.n_bytes:
+# #                     return raw_bytes
+# #                 else:
+# #                     error_message = (
+# #                         f'Value must have an unencoded length of '
+# #                         f'{self.n_bytes} bytes.'
+# #                     )
+# #                     self.input_prompt.errors.append(error_message)
+# #             except binascii.Error:
+# #                 self.input_prompt.errors.append('Value must be valid Base64.')
+
+# # class HexadecimalPrompt(Prompt):
+# #     def __init__(
+# #             self,
+# #             message: str,
+# #             max_length: int,
+# #             n_bytes: int | None = None,
+# #         ):
+# #         super().__init__(message)
+# #         self.input_prompt = InputPrompt(message, max_length)
+# #         if n_bytes is not None and n_bytes <= 0:
+# #             raise ValueError('Required bytes length must be positive.')
+# #         self.n_bytes = n_bytes
+
+# #     def run(self, stdscr: curses.window) -> bytes | None:
+# #         while True:
+# #             input = self.input_prompt.run(stdscr)
+# #             if input is None:
+# #                 return None
+# #             try:
+# #                 raw_bytes = bytes.fromhex(input)
+# #                 if self.n_bytes is None or len(raw_bytes) == self.n_bytes:
+# #                     return raw_bytes
+# #                 else:
+# #                     error_message = (
+# #                         f'Value must have an unencoded length of '
+# #                         f'{self.n_bytes} bytes.'
+# #                     )
+# #                     self.input_prompt.errors = [error_message]
+# #             except ValueError:
+# #                 self.input_prompt.errors = ['Value must be valid hexadecimal.']

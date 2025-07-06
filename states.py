@@ -5,5 +5,8 @@ class State(Enum):
     NEXT_WINDOW = auto()
     PREV_WINDOW = auto()
     RESIZE = auto()
+    PROMPT_ACTIVE = auto()
+    PROMPT_SUBMITTED = auto()
+    PROMPT_CANCELLED = auto()
     ADD_CONTACT = auto()
     TERMINATE = auto()

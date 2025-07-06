@@ -7,6 +7,7 @@ from sqlalchemy import Engine
 from components.base import Measurement
 from components.menus import PaginatedMenu
 from components.messages import MessageEntry, MessageLog
+from components.prompts import Prompt, PromptNode
 from database.operations import get_contacts
 
 class ContactsMenu(PaginatedMenu):
@@ -52,3 +53,15 @@ class ContactsMenu(PaginatedMenu):
     def _refresh(self):
         self._contacts = get_contacts(self._engine)
         self._items = [x.name for x in self._contacts]
+
+class ContactsPrompt(Prompt):
+    def __init__(self) -> None:
+        name_node = PromptNode(
+            name='name',
+            message='Enter a unique name for this contact.',
+        )
+        key_node = PromptNode(
+            name='name',
+            message='Enter a unique public key for this contact.',
+        )
+        super().__init__(name_node, key_node)

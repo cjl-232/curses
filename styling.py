@@ -11,13 +11,9 @@ class LayoutUnit(Enum):
 class LayoutMeasure:
     def __init__(
             self,
-            elements: _LayoutElement | list[_LayoutElement] | None = None,
+            *elements: _LayoutElement,
         ) -> None:
-        if elements is None:
-            elements = []
-        elif not isinstance(elements, list):
-            elements = [elements]
-        self.elements = elements
+        self.elements = list(elements)
 
     def calc(self, parent_chars: int):
         result = 0

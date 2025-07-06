@@ -7,6 +7,7 @@ import httpx
 
 from sqlalchemy import create_engine
 
+from components.contacts import ContactsPrompt
 from database.operations import store_fetched_data
 from parser import ClientArgumentParser
 from server.operations import fetch_data
@@ -83,7 +84,29 @@ class App:
                         window.place(self.stdscr)
                     state = State.STANDARD
                 case State.ADD_CONTACT:
-                    raise NotImplementedError
+                    self.stdscr.erase()
+                    self.stdscr.refresh()
+                    state = State.PROMPT_ACTIVE
+                    prompt = ContactsPrompt()
+                    prompt.place(self.stdscr)
+                    while state == State.PROMPT_ACTIVE:
+                        if prompt.draw_required:
+                            prompt.draw()
+                            prompt.draw_required = False
+                        key = self.stdscr.getch()
+                        if key == curses.KEY_RESIZE:
+                            prompt.place(self.stdscr)
+                        else:
+                            state = prompt.handle_key(key)
+                    match state:
+                        case State.PROMPT_SUBMITTED:
+                            print({x.name: x.input for x in prompt.nodes})
+                            exit()
+                        case _:
+                            pass
+                    state = State.STANDARD
+                case _:
+                    state = State.STANDARD
 
             
 
@@ -104,21 +127,21 @@ if __name__ == '__main__':
             PaginatedMenu(
                 items=['a', 'b', 'c', 'd', 'e'] * 30,
                 layout=Layout(
-                    height=LayoutMeasure([
+                    height=LayoutMeasure(
                         (100, LayoutUnit.PERCENTAGE),
                         (-10, LayoutUnit.CHARS),
-                    ]),
-                    width=LayoutMeasure([
+                    ),
+                    width=LayoutMeasure(
                         (50, LayoutUnit.PERCENTAGE),
                         (20, LayoutUnit.CHARS),
-                    ]),
-                    top=LayoutMeasure([
+                    ),
+                    top=LayoutMeasure(
                         (10, LayoutUnit.CHARS),
-                    ]),
-                    left=LayoutMeasure([
+                    ),
+                    left=LayoutMeasure(
                         (50, LayoutUnit.PERCENTAGE),
                         (-20, LayoutUnit.CHARS),
-                    ]),
+                    ),
                 ),
                 padding=Padding(1, 2, 3),
                 title='Test Menu',
