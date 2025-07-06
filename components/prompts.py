@@ -66,6 +66,8 @@ class Prompt(ManagedWindow):
                 self.node_index += 1
                 if self.node_index >= len(self.nodes):
                     return State.PROMPT_SUBMITTED
+                else:
+                    self.draw_required = True
             case 27:  # Esc
                 node.input = ''
                 self.node_index -= 1

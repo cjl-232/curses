@@ -61,7 +61,7 @@ class ContactsPrompt(Prompt):
             message='Enter a unique name for this contact.',
         )
         key_node = PromptNode(
-            name='name',
+            name='public_key',
             message='Enter a unique public key for this contact.',
         )
         super().__init__(name_node, key_node)
