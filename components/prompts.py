@@ -26,6 +26,8 @@ class Prompt(ManagedWindow):
         self.node_index = 0
 
     def draw(self, focused: bool = True):
+        self.window.erase()
+
         # Determine the current node.
         node = self.nodes[self.node_index]
 
