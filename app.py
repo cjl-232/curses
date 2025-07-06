@@ -100,10 +100,13 @@ class App:
                             state = prompt.handle_key(key)
                     match state:
                         case State.PROMPT_SUBMITTED:
-                            print({x.name: x.input for x in prompt.nodes})
-                            exit()
+                            ... #print({x.name: x.input for x in prompt.nodes})
                         case _:
                             pass
+                    self.stdscr.erase()
+                    self.stdscr.refresh()
+                    for window in self.windows:
+                        window.draw_required = True
                     state = State.STANDARD
                 case _:
                     state = State.STANDARD
