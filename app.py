@@ -7,18 +7,22 @@ import httpx
 
 from sqlalchemy import create_engine
 
-from body import Body
 from database.operations import store_fetched_data
 from parser import ClientArgumentParser
 from server.operations import fetch_data
 from settings import settings  # This is causing slowdown. Adjust it.
+from states import State
+from windows import ManagedWindow
 
 parser = ClientArgumentParser()
 
 class App:
-    def __init__(self):
+    def __init__(self, stdscr: curses.window, *windows: ManagedWindow):
+        self.stdscr = stdscr
         self.engine = create_engine(settings.local_database.url)
         self.signature_key = parser.signature_key
+        self.windows = list(windows)
+        self.focus_index = 0
 
     def _fetch_handler(self):
         client = httpx.Client(timeout=settings.server.request_timeout)
@@ -28,15 +32,66 @@ class App:
                 store_fetched_data(self.engine, response)
             time.sleep(settings.server.fetch_interval)
 
-    def run(self):
-        curses.wrapper(lambda stdscr: Body(stdscr).run())
+    def _handle_key_standard(self, key: int) -> State:
+        match key:
+            case 9:   # Tab
+                return State.NEXT_WINDOW
+            case curses.KEY_BTAB:
+                return State.PREV_WINDOW
+            case curses.KEY_RESIZE:
+                return State.RESIZE
+            case 27:  # Esc
+                return State.TERMINATE
+            case _:
+                return self.windows[self.focus_index].handle_key(key)
 
-from components.windows import (
+    def run(self):
+        self.stdscr.keypad(True)
+        self.stdscr.nodelay(True)
+        self.stdscr.clear()
+        self.stdscr.refresh()
+        state = State.STANDARD
+        for window in self.windows:
+            window.place(self.stdscr)
+        while self.windows and state != State.TERMINATE:
+            match state:
+                case State.STANDARD:
+                    for index, window in enumerate(self.windows):
+                        if window.draw_required:
+                            window.draw(index == self.focus_index)
+                    state = self._handle_key_standard(self.stdscr.getch())
+                case State.NEXT_WINDOW:
+                    for _ in range(len(self.windows)):
+                        self.focus_index += 1
+                        if self.focus_index >= len(self.windows):
+                            self.focus_index = 0
+                        if self.windows[self.focus_index].focusable:
+                            break
+                    state = State.STANDARD
+                case State.PREV_WINDOW:
+                    for _ in range(len(self.windows)):
+                        self.focus_index -= 1
+                        if self.focus_index < 0:
+                            self.focus_index = len(self.windows) - 1
+                        if self.windows[self.focus_index].focusable:
+                            break
+                    state = State.STANDARD
+                case State.RESIZE:
+                    self.stdscr.erase()
+                    self.stdscr.refresh()
+                    for window in self.windows:
+                        window.place(self.stdscr)
+                    state = State.STANDARD
+                case State.ADD_CONTACT:
+                    raise NotImplementedError
+
+            
+
+from styling import (
     Layout,
     LayoutMeasure,
     LayoutUnit,
     Padding,
-    WindowManager,
 )
 from components.menus import PaginatedMenu
 
@@ -44,8 +99,8 @@ from components.menus import PaginatedMenu
 
 if __name__ == '__main__':
     def main(stdscr: curses.window):
-        manager = WindowManager(stdscr)
-        manager.windows.append(
+        app = App(stdscr)
+        app.windows.append(
             PaginatedMenu(
                 items=['a', 'b', 'c', 'd', 'e'] * 30,
                 layout=Layout(
@@ -70,5 +125,5 @@ if __name__ == '__main__':
                 footer='Ctrl-A: Add Contact'
             )
         )
-        manager.run()
+        app.run()
     curses.wrapper(main)

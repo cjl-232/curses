@@ -2,15 +2,17 @@ import abc
 import curses
 import math
 
-from components.windows import Layout, ManagedWindow, Padding
 from settings import settings
+from states import State
+from styling import Layout, Padding
+from windows import ManagedWindow
 
 class PaginatedMenu(ManagedWindow, metaclass=abc.ABCMeta):
     def __init__(
             self,
             items: list[str],
             layout: Layout,
-            padding: Padding = Padding(),
+            padding: Padding | None = None,
             title: str | None = None,
             footer: str | None = None,
         ) -> None:
@@ -66,8 +68,10 @@ class PaginatedMenu(ManagedWindow, metaclass=abc.ABCMeta):
         # Refresh the window.
         self.window.refresh()
 
-    def handle_key(self, key: int):
+    def handle_key(self, key: int) -> State:
         items_per_page = self._get_internal_size()[0] - 1
+        if items_per_page <= 0:
+            return State.STANDARD
         page_count = math.ceil(len(self.items) / items_per_page)
         last_page_index = items_per_page * (page_count - 1)
         relative_cursor_index = self.cursor_index % items_per_page
@@ -111,3 +115,6 @@ class PaginatedMenu(ManagedWindow, metaclass=abc.ABCMeta):
             if self.cursor_index != len(self.items) - 1:
                 self.cursor_index = len(self.items) - 1
                 self.draw_required = True
+        elif key == 1:
+            return State.ADD_CONTACT
+        return State.STANDARD
