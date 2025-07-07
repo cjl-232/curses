@@ -89,7 +89,7 @@ class TextPromptNode(_PromptNode):
 
 class Prompt(ManagedWindow):
     def __init__(self, node: _PromptNode, *nodes: _PromptNode) -> None:
-        super().__init__(_fullscreen_layout, Padding(1), bordered=False)
+        super().__init__(_fullscreen_layout, Padding(0, 1), bordered=False)
         self.nodes = [node] + list(nodes)
         self.node_index = 0
 
