@@ -61,7 +61,7 @@ class ManagedWindow(metaclass=abc.ABCMeta):
         """
         parent_height, parent_width = stdscr.getmaxyx()
         top = min(self.top.calc(parent_height), parent_height)
-        left = min(self.left.calc(parent_width), parent_height)
+        left = min(self.left.calc(parent_width), parent_width)
         height = min(self.height.calc(parent_height), parent_height - top)
         width = min(self.width.calc(parent_width), parent_width - left)
         if top < 0 or left < 0 or height <= 0 or width <= 0:
