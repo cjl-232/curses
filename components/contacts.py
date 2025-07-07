@@ -2,12 +2,15 @@
 
 import curses
 
+from enum import Enum
+
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from sqlalchemy import Engine
 
 from components.base import Measurement
 from components.menus import PaginatedMenu
 from components.messages import MessageEntry, MessageLog
-from components.prompts import Prompt, PromptNode
+from components.prompts import Prompt, ChoicePromptNode, TextPromptNode
 from database.operations import get_contacts
 
 class ContactsMenu(PaginatedMenu):
@@ -54,14 +57,40 @@ class ContactsMenu(PaginatedMenu):
         self._contacts = get_contacts(self._engine)
         self._items = [x.name for x in self._contacts]
 
+class _KeyEntryMethod(Enum):
+    HEX = 'Hexadecimal Value'
+    BASE64 = 'Base64 Value'
+    PEMFILE = 'PEM-Encoded File'
+    DERFILE = 'DER-Encoded File'
+
 class ContactsPrompt(Prompt):
     def __init__(self) -> None:
-        name_node = PromptNode(
+        self.name_node = TextPromptNode(
             name='name',
             message='Enter a unique name for this contact.',
         )
-        key_node = PromptNode(
+        self.key_method_node = ChoicePromptNode[_KeyEntryMethod](
+            'key_method',
+            "Select an entry method for this contact's public key.",
+            _KeyEntryMethod.HEX,
+            _KeyEntryMethod.BASE64,
+            _KeyEntryMethod.PEMFILE,
+            _KeyEntryMethod.DERFILE,
+        )
+        self.key_node = TextPromptNode(
             name='public_key',
             message='Enter a unique public key for this contact.',
         )
-        super().__init__(name_node, key_node)
+        super().__init__(self.name_node, self.key_method_node, self.key_node)
+    
+    def retrieve_contact(self) -> tuple[str, Ed25519PublicKey]:
+        name = self.name_node.input
+        match self.key_method_node.input:
+            case _KeyEntryMethod.HEX:
+                key_bytes = bytes.fromhex(self.key_node.input)
+            case _:
+                return None
+        return name, Ed25519PublicKey.from_public_bytes(key_bytes)
+
+
+

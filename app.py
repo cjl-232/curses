@@ -1,4 +1,7 @@
 #TODO replace settings with cached... ideally also property?
+#TODO figure this out... derive from prompts, get a result property that takes
+# into account NUMERIC choices as well. Text prompt vs choice prompt.
+# Implement as a enum in the PromptNode field?
 
 import curses
 import time
@@ -100,7 +103,7 @@ class App:
                             state = prompt.handle_key(key)
                     match state:
                         case State.PROMPT_SUBMITTED:
-                            ... #print({x.name: x.input for x in prompt.nodes})
+                            print(prompt.retrieve_contact())
                         case _:
                             pass
                     self.stdscr.erase()
