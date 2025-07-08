@@ -11,94 +11,87 @@ from components.entries import Entry
 from components.logs import Log
 from database.models import Message, MessageType
 from database.schemas.outputs import ContactOutputSchema, MessageOutputSchema
+from states import State
+from styling import Layout, Padding
 
-class _MessageComponent(metaclass=abc.ABCMeta):
-    _engine: Engine
-    _contact: ContactOutputSchema | None
 
+class _SetContactMixin:
     def set_contact(self, contact: ContactOutputSchema | None) -> bool:
-        if self._contact != contact:
-            self._contact = contact
+        if self.contact != contact:
+            self.contact = contact
             return True
         return False
 
-class MessageLog(Log, _MessageComponent):
+class MessageLog(Log, _SetContactMixin):
     def __init__(
             self,
             engine: Engine,
             contact: ContactOutputSchema | None,
-            output_log: Log,
-            stdscr: curses.window,
-            height: Measurement,
-            width: Measurement,
-            top: Measurement,
-            left: Measurement,
+            layout: Layout,
+            padding: Padding | None = None,
+            title: str | None = None,
+            footer: str | None = None,
+            bordered: bool = True,
+            focusable: bool = True,
         ):
-        super().__init__(
-            stdscr=stdscr,
-            height=height,
-            width=width,
-            top=top,
-            left=left,
-            title=contact.name if contact is not None else None,
-        )
-        self._engine = engine
-        self._contact = contact
-        self._output_log = output_log
-        self._scroll_index: int = 0 # Scroll upwards
-        self._loaded_nonces: list[str] = list()
+        super().__init__(layout, padding, title, footer, bordered, focusable)
+        if not self.title and contact is not None:
+            self.title = contact.name
+        self.engine = engine
+        self.contact = contact
+        self.loaded_nonces: list[str] = list()
         self.update()
 
-    def handle_key(self, key: int):
-        if key == curses.KEY_F5:
-            self.update()
-        elif key == 281: # SHIFT-F5
-            self._refresh()
-        else:
-            super().handle_key(key)
+    def handle_key(self, key: int) -> State:
+        match key:
+            case curses.KEY_F5:
+                self.update()
+                return State.STANDARD
+            case 281:  # Shift-F5
+                self.refresh()
+                return State.STANDARD
+            case _:
+                return super().handle_key(key)
 
     def set_contact(self, contact: ContactOutputSchema | None) -> bool:
         contact_replaced = super().set_contact(contact)
         if contact_replaced:
-            if self._contact is not None:
-                self._title = self._contact.name
+            if self.contact is not None:
+                self.title = self.contact.name
             else:
-                self._title = None
-            self._refresh()
+                self.title = ''
+            self.refresh()
             self.draw_required = True
         return contact_replaced
 
     def update(self):
-        self._load_messages()
-
-    def _load_messages(self):
-        if self._contact is None:
+        if self.contact is None:
             return
-        with Session(self._engine) as session:
+        with Session(self.engine) as session:
             query = (
                 select(Message)
-                .where(Message.contact_id == self._contact.id)
-                .where(~Message.nonce.in_(self._loaded_nonces))
+                .where(Message.contact_id == self.contact.id)
+                .where(~Message.nonce.in_(self.loaded_nonces))
                 .order_by(Message.timestamp)
             )
             for obj in session.scalars(query):
                 output = MessageOutputSchema.model_validate(obj)
                 if output.message_type == MessageType.RECEIVED:
-                    title = f'{self._contact.name}:'
+                    title = f'{self.contact.name}:'
                 else:
                     title = 'You:'
                 self.add_item(output.text, False, title, output.timestamp)
-                self._loaded_nonces.append(output.nonce)
+                self.loaded_nonces.append(output.nonce)
                 self.draw_required = True
 
-    def _refresh(self):
-        self._window.erase()
-        self._loaded_nonces.clear()
-        self._item_lines.clear()
-        self._scroll_index = 0
-        self._load_messages()
+    def refresh(self):
+        self.window.erase()
+        self.loaded_nonces.clear()
+        self.item_lines.clear()
+        self.scroll_index = 0
+        self.update()
 
-class MessageEntry(Entry, _MessageComponent):
+class MessageEntry(Entry, _SetContactMixin):
     def __init__(
             self,
             engine: Engine,

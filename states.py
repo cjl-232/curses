@@ -9,4 +9,5 @@ class State(Enum):
     PROMPT_SUBMITTED = auto()
     PROMPT_CANCELLED = auto()
     ADD_CONTACT = auto()
+    SELECT_CONTACT = auto()
     TERMINATE = auto()

@@ -8,9 +8,11 @@ import time
 
 import httpx
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Engine
 
-from components.contacts import ContactsPrompt
+from components.contacts import ContactsMenu, ContactsPrompt
+from components.messages import MessageLog
+from database.models import Base
 from database.operations import store_fetched_data
 from parser import ClientArgumentParser
 from server.operations import fetch_data
@@ -21,11 +23,20 @@ from windows import ManagedWindow
 parser = ClientArgumentParser()
 
 class App:
-    def __init__(self, stdscr: curses.window, *windows: ManagedWindow):
+    def __init__(
+            self,
+            stdscr: curses.window,
+            engine: Engine,
+            contacts_menu: ContactsMenu,
+            message_log: MessageLog,
+            *extra_windows: ManagedWindow,
+        ):
         self.stdscr = stdscr
-        self.engine = create_engine(settings.local_database.url)
+        self.engine = engine
         self.signature_key = parser.signature_key
-        self.windows = list(windows)
+        self.contacts_menu = contacts_menu
+        self.message_log = message_log
+        self.windows = [contacts_menu, message_log] + list(extra_windows)
         self.focus_index = 0
 
     def _fetch_handler(self):
@@ -111,6 +122,10 @@ class App:
                     for window in self.windows:
                         window.draw_required = True
                     state = State.STANDARD
+                case State.SELECT_CONTACT:
+                    selected_contact = self.contacts_menu.current_contact
+                    self.message_log.set_contact(selected_contact)
+                    state = State.STANDARD
                 case _:
                     state = State.STANDARD
 
@@ -128,10 +143,13 @@ from components.contacts import ContactsMenu
 
 if __name__ == '__main__':
     def main(stdscr: curses.window):
-        app = App(stdscr)
-        app.windows.append(
-            ContactsMenu(
-                engine=app.engine,
+        engine = create_engine(settings.local_database.url)
+        Base.metadata.create_all(engine)
+        app = App(
+            stdscr=stdscr,
+            engine=engine,
+            contacts_menu=ContactsMenu(
+                engine=engine,
                 layout=Layout(
                     height=LayoutMeasure(
                         (80, LayoutUnit.PERCENTAGE),
@@ -141,6 +159,23 @@ if __name__ == '__main__':
                     ),
                     top=LayoutMeasure(),
                     left=LayoutMeasure(),
+                ),
+                padding=Padding(1),
+            ),
+            message_log=MessageLog(
+                engine=engine,
+                contact=None,
+                layout=Layout(
+                    height=LayoutMeasure(
+                        (80, LayoutUnit.PERCENTAGE),
+                    ),
+                    width=LayoutMeasure(
+                        (80, LayoutUnit.PERCENTAGE),
+                    ),
+                    top=LayoutMeasure(),
+                    left=LayoutMeasure(
+                        (20, LayoutUnit.PERCENTAGE),
+                    ),
                 ),
                 padding=Padding(1),
             )

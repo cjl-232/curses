@@ -37,19 +37,21 @@ class ContactsMenu(PaginatedMenu):
             case 1:  # Ctrl-A
                 return State.ADD_CONTACT
             case curses.KEY_F5:
-                self._refresh()
-            # Implement a contact select state
-            # case curses.KEY_ENTER | 10:
-            #     contact = self._contacts[self._cursor_index]
-            #     self._message_log.set_contact(contact)
-            #     self._message_entry.set_contact(contact)
+                self.refresh()
+            case curses.KEY_ENTER | 10:
+                return State.SELECT_CONTACT
             case _:
                 super().handle_key(key)
         return State.STANDARD
 
-    def _refresh(self):
-        self._contacts = get_contacts(self.engine)
-        self.items = [x.name for x in self._contacts]
+    def refresh(self):
+        self.contacts = get_contacts(self.engine)
+        self.items = [x.name for x in self.contacts]
+
+    @property
+    def current_contact(self):
+        return self.contacts[self.cursor_index]
+
 
 class _KeyEntryMethod(Enum):
     HEX = 'Hexadecimal Value'

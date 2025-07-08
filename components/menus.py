@@ -115,6 +115,4 @@ class PaginatedMenu(ManagedWindow, metaclass=abc.ABCMeta):
             if self.cursor_index != len(self.items) - 1:
                 self.cursor_index = len(self.items) - 1
                 self.draw_required = True
-        elif key == 1:
-            return State.ADD_CONTACT
         return State.STANDARD
