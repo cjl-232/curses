@@ -7,6 +7,7 @@ import curses
 import time
 
 from datetime import datetime
+from threading import Thread
 
 import httpx
 
@@ -53,6 +54,11 @@ class App:
                 store_fetched_data(self.engine, response)
             time.sleep(settings.server.fetch_interval)
 
+    def _refresh_handler(self):
+        while True:
+            self.message_log.update()
+            time.sleep(1.0)
+
     def _handle_key_standard(self, key: int) -> State:
         match key:
             case 9:   # Tab
@@ -73,6 +79,8 @@ class App:
         self.stdscr.refresh()
         for window in self.windows:
             window.place(self.stdscr)
+        Thread(target=self._fetch_handler, daemon=True).start()
+        Thread(target=self._refresh_handler, daemon=True).start()
         state = State.STANDARD
         while self.windows and state != State.TERMINATE:
             match state:
@@ -156,10 +164,19 @@ class App:
                     self.message_entry.set_contact(selected_contact)
                     state = State.STANDARD
                 case State.SEND_MESSAGE:
-                    raise Exception(self.message_entry.input)
+                    try:
+                        pass
+                    except Exception as e:
+                        self.output_log.add_item(
+                            text=str(e),
+                            cached=False,
+                            title='Add Contact Error',
+                            timestamp=datetime.now(),
+                        )
                     state = State.STANDARD
                 case _:
                     state = State.STANDARD
+        self.stdscr.clear()
 
             
 

@@ -63,20 +63,11 @@ def store_message(
     ):
     """Encrypt a message and prepare it for posting."""
 
-# TODO Need to uncache nones when adding as a contact...
-    
-# TODO completely clean
-def store_fetched_data(
-        engine: Engine,
-        response: FetchResponseSchema,
-    ):
+def store_fetched_data(engine: Engine, response: FetchResponseSchema):
+    # Cached functions are used for data retrieval.
     @cache
-    def get_contact_id(raw_key_bytes: bytes):
-        b64_key = urlsafe_b64encode(raw_key_bytes).decode()
-        query = (
-            select(Contact.id)
-            .where(Contact.verification_key == b64_key)
-        )
+    def get_contact_id(key: str) -> int | None:
+        query = select(Contact.id).where(Contact.verification_key == key)
         with Session(engine) as session:
             return session.scalar(query)
     @cache
@@ -88,30 +79,33 @@ def store_fetched_data(
         )
         with Session(engine) as session:
             return [Fernet(x) for x in session.scalars(query)]
+    @cache
+    def nonce_exists(nonce: str) -> bool:
+        query = exists().where(Message.nonce == nonce).select()
+        with Session(engine) as session:
+            return bool(session.scalar(query))
+    # Iterate over fetched messages and keys.
     with Session(engine) as session:
         for message in response.data.messages:
+            # Check each message is valid, new, and from a registered contact.
             if not message.is_valid:
                 continue
-            sender_key_bytes = message.sender_public_key.public_bytes_raw()
-            contact_id = get_contact_id(sender_key_bytes)
-            if contact_id is None:
+            elif get_contact_id(message.sender_public_key_b64) is None:
                 continue
-            text = None
+            elif not nonce_exists(message.nonce):
+                continue
+            contact_id = get_contact_id(message.sender_public_key_b64)
+            # Attempt to decrypt each message.
+            text = ''
             for fernet_key in get_fernet_keys(contact_id):
                 try:
                     text = fernet_key.decrypt(message.encrypted_text).decode()
                     break
-                except:
+                except Exception:
                     pass
             if not text:
                 continue
-            query = (
-                exists()
-                .where(Message.nonce == message.nonce)
-                .select()
-            )
-            if session.scalar(query):
-                continue
+            # Add decrypted messages to the database.
             input = MessageInputSchema.model_validate({
                 'text': text,
                 'contact_id': contact_id,
@@ -122,7 +116,7 @@ def store_fetched_data(
             session.add(Message(**input.model_dump()))
         
         for exchange_key in response.data.exchange_keys:
-            pass
+            print(exchange_key)
         session.commit()
 
 

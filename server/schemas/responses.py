@@ -1,6 +1,9 @@
 import abc
 
-from pydantic import AliasChoices, BaseModel, Field
+from base64 import urlsafe_b64encode
+from typing import Self
+
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 
 from schema_components.types import (
     PublicExchangeKey,
@@ -45,7 +48,15 @@ class _FetchResponseElement(BaseModel, _TimestampMixin, metaclass=abc.ABCMeta):
             'sender_key',
         ),
     )
+    sender_public_key_b64: str
     signature: RawSignature
+
+    @model_validator(mode='after')
+    def preserve_base64_sender_key(self) -> Self:
+        raw_key_bytes = self.sender_public_key.public_bytes_raw()
+        b64_key_bytes = urlsafe_b64encode(raw_key_bytes)
+        self.sender_public_key_b64 = b64_key_bytes.decode()
+        return self
 
     @abc.abstractmethod
     def _get_data(self) -> bytes:
@@ -56,7 +67,7 @@ class _FetchResponseElement(BaseModel, _TimestampMixin, metaclass=abc.ABCMeta):
         try:
             self.sender_public_key.verify(self.signature, self._get_data())
             return True
-        except:
+        except Exception:
             return False
 
     class Config:
