@@ -6,19 +6,22 @@
 import curses
 import time
 
+from datetime import datetime
+
 import httpx
 
 from sqlalchemy import create_engine, Engine
 
 from components.contacts import ContactsMenu, ContactsPrompt
-from components.messages import MessageLog
+from components.logs import Log
+from components.messages import MessageEntry, MessageLog
 from database.models import Base
-from database.operations import store_fetched_data
+from database.operations import add_contact, store_fetched_data
+from database.schemas.inputs import ContactInputSchema
 from parser import ClientArgumentParser
 from server.operations import fetch_data
 from settings import settings  # This is causing slowdown. Adjust it.
 from states import State
-from windows import ManagedWindow
 
 parser = ClientArgumentParser()
 
@@ -29,14 +32,17 @@ class App:
             engine: Engine,
             contacts_menu: ContactsMenu,
             message_log: MessageLog,
-            *extra_windows: ManagedWindow,
+            message_entry: MessageEntry,
+            output_log: Log,
         ) -> None:
         self.stdscr = stdscr
         self.engine = engine
         self.signature_key = parser.signature_key
         self.contacts_menu = contacts_menu
         self.message_log = message_log
-        self.windows = [contacts_menu, message_log] + list(extra_windows)
+        self.message_entry = message_entry
+        self.output_log = output_log
+        self.windows = [contacts_menu, message_log, message_entry, output_log]
         self.focus_index = 0
 
     def _fetch_handler(self):
@@ -114,7 +120,29 @@ class App:
                             state = prompt.handle_key(key)
                     match state:
                         case State.PROMPT_SUBMITTED:
-                            print(prompt.retrieve_contact())
+                            try:
+                                name, public_key = prompt.retrieve_contact()
+                                contact = ContactInputSchema.model_validate({
+                                    'name': name,
+                                    'verification_key': public_key,
+                                })
+                                add_contact(self.engine, contact)
+                                self.output_log.add_item(
+                                    text=f"Added new contact '{name}'.",
+                                    cached=False,
+                                    title='Successful Operation',
+                                    timestamp=datetime.now(),
+                                )
+                            except Exception as e:
+                                self.output_log.add_item(
+                                    text=str(e),
+                                    cached=False,
+                                    title='Add Contact Error',
+                                    timestamp=datetime.now(),
+                                )
+                            self.contacts_menu.refresh()
+
+
                         case _:
                             pass
                     self.stdscr.erase()
@@ -125,6 +153,10 @@ class App:
                 case State.SELECT_CONTACT:
                     selected_contact = self.contacts_menu.current_contact
                     self.message_log.set_contact(selected_contact)
+                    self.message_entry.set_contact(selected_contact)
+                    state = State.STANDARD
+                case State.SEND_MESSAGE:
+                    raise Exception(self.message_entry.input)
                     state = State.STANDARD
                 case _:
                     state = State.STANDARD
@@ -146,9 +178,9 @@ if __name__ == '__main__':
         engine = create_engine(settings.local_database.url)
         Base.metadata.create_all(engine)
         app = App(
-            stdscr=stdscr,
-            engine=engine,
-            contacts_menu=ContactsMenu(
+            stdscr,
+            engine,
+            ContactsMenu(
                 engine=engine,
                 layout=Layout(
                     height=LayoutMeasure(
@@ -162,12 +194,13 @@ if __name__ == '__main__':
                 ),
                 padding=Padding(1),
             ),
-            message_log=MessageLog(
+            MessageLog(
                 engine=engine,
                 contact=None,
                 layout=Layout(
                     height=LayoutMeasure(
                         (80, LayoutUnit.PERCENTAGE),
+                        (-4, LayoutUnit.CHARS),
                     ),
                     width=LayoutMeasure(
                         (80, LayoutUnit.PERCENTAGE),
@@ -178,7 +211,45 @@ if __name__ == '__main__':
                     ),
                 ),
                 padding=Padding(1),
-            )
+            ),
+            MessageEntry(
+                engine=engine,
+                contact=None,
+                layout=Layout(
+                    height=LayoutMeasure(
+                        (4, LayoutUnit.CHARS),
+                    ),
+                    width=LayoutMeasure(
+                        (80, LayoutUnit.PERCENTAGE),
+                    ),
+                    top=LayoutMeasure(
+                        (80, LayoutUnit.PERCENTAGE),
+                        (-4, LayoutUnit.CHARS),
+                    ),
+                    left=LayoutMeasure(
+                        (20, LayoutUnit.PERCENTAGE),
+                    ),
+                ),
+                padding=Padding(0, 1),
+            ),
+            Log(
+                layout=Layout(
+                    height=LayoutMeasure(
+                        (20, LayoutUnit.CHARS),
+                    ),
+                    width=LayoutMeasure(
+                        (100, LayoutUnit.PERCENTAGE),
+                    ),
+                    top=LayoutMeasure(
+                        (80, LayoutUnit.PERCENTAGE),
+                    ),
+                    left=LayoutMeasure(),
+                ),
+                padding=Padding(0, 1),
+            ),
         )
         app.run()
     curses.wrapper(main)
+
+# TODO go back to having a windowmanager class that the app is derived from
+# Use the app class constructor to make the windows based on settings

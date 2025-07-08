@@ -6,10 +6,15 @@ from sqlalchemy import Engine, exists, select
 from sqlalchemy.orm import Session
 
 from database.models import Contact, FernetKey, Message, MessageType
-from database.schemas.inputs import MessageInputSchema
+from database.schemas.inputs import ContactInputSchema, MessageInputSchema
 from database.schemas.outputs import ContactOutputSchema
 from exceptions import MissingFernetKey
 from server.schemas.responses import FetchResponseSchema
+
+def add_contact(engine: Engine, contact: ContactInputSchema):
+    with Session(engine) as session:
+        session.add(Contact(**contact.model_dump()))
+        session.commit()
 
 def get_contact(
         engine: Engine,

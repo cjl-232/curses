@@ -67,7 +67,7 @@ class Log(ManagedWindow):
             cached: bool,
             title: str | None = None,
             timestamp: datetime | None = None,
-    ):
+        ):
         width = self._get_internal_size()[1]
         if width <= 0:
             return
@@ -82,12 +82,12 @@ class Log(ManagedWindow):
             header += timestamp.strftime('%Y-%m-%d %H:%M')
         if header:
             self.item_lines += [(header, True)]
-            if self.scroll_index != 0:
+            if self.scroll_index > 0:
                 self.scroll_index += 1
         if not cached:
             self.items.append((text, title, timestamp))
         self.item_lines += [(x, False) for x in wrapped_text]
-        if self.scroll_index != 0:
+        if self.scroll_index > 0:
             self.scroll_index += len(wrapped_text)
         self.draw_required = True
 
@@ -98,4 +98,4 @@ class Log(ManagedWindow):
         for (text, title, timestamp) in self.items:
             self.add_item(text, True, title, timestamp)
         if self.scroll_index > len(self.item_lines) - height:
-            self.scroll_index = len(self.item_lines) - height
+            self.scroll_index = max(len(self.item_lines) - height, 0)

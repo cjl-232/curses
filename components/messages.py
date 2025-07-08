@@ -1,12 +1,8 @@
-import abc
 import curses
-
-from datetime import datetime
 
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
-from components.base import Measurement
 from components.entries import Entry
 from components.logs import Log
 from database.models import Message, MessageType
@@ -95,53 +91,35 @@ class MessageEntry(Entry, _SetContactMixin):
     def __init__(
             self,
             engine: Engine,
-            output_log: Log,
             contact: ContactOutputSchema | None,
-            stdscr: curses.window,
-            height: Measurement,
-            width: Measurement,
-            top: Measurement,
-            left: Measurement,
+            layout: Layout,
+            padding: Padding | None = None,
+            title: str | None = None,
+            footer: str | None = None,
+            bordered: bool = True,
+            focusable: bool = True,
         ):
-        super().__init__(
-            stdscr=stdscr,
-            height=height,
-            width=width,
-            top=top,
-            left=left,
-            title='Message Entry',
-        )
-        self._engine = engine
-        self._contact = contact
-        self._output_log = output_log
-        self._stored_inputs: dict[int, str] = dict()
+        super().__init__(layout, padding, title, footer, bordered, focusable)
+        self.engine = engine
+        self.contact = contact
+        self.stored_inputs: dict[int, str] = dict()
         
-    def handle_key(self, key: int):
-        if self._contact is not None:
-            if key == 10 or key == curses.KEY_ENTER:
-                try:
-                    raise NotImplementedError('Messaging not implemented.')
-                except NotImplementedError as e:
-                    self._output_log.add_item(
-                        text=str(e),
-                        cached=False,
-                        title='NotImplementedError',
-                        timestamp=datetime.now(),
-                    )
-                curses.curs_set(0)
-                self._input = ''
-                self._cursor_index = 0
-                self.draw_required = True
-            else:
-                super().handle_key(key)
+    def handle_key(self, key: int) -> State:
+        if self.contact is not None:
+            match key:
+                case 10 | curses.KEY_ENTER:
+                    return State.SEND_MESSAGE
+                case _:
+                    return super().handle_key(key)
+        return State.STANDARD
 
     def set_contact(self, contact: ContactOutputSchema | None) -> bool:
-        if self._contact is not None:
-            self._stored_inputs[self._contact.id] = self._input
+        if self.contact is not None:
+            self.stored_inputs[self.contact.id] = self.input
         contact_replaced = super().set_contact(contact)
         if contact_replaced:
-            if self._contact is not None:
-                self._input = self._stored_inputs.get(self._contact.id, '')
-            self._cursor_index = 0
+            if self.contact is not None:
+                self.input = self.stored_inputs.get(self.contact.id, '')
+                self.cursor_index = len(self.input)
             self.draw_required = True
         return contact_replaced

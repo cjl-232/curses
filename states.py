@@ -10,4 +10,5 @@ class State(Enum):
     PROMPT_CANCELLED = auto()
     ADD_CONTACT = auto()
     SELECT_CONTACT = auto()
+    SEND_MESSAGE = auto()
     TERMINATE = auto()
