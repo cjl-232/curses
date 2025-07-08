@@ -1,9 +1,9 @@
 import abc
 
 from base64 import urlsafe_b64encode
-from typing import Self
+from functools import cached_property
 
-from pydantic import AliasChoices, BaseModel, Field, model_validator
+from pydantic import AliasChoices, BaseModel, Field
 
 from schema_components.types import (
     PublicExchangeKey,
@@ -48,15 +48,12 @@ class _FetchResponseElement(BaseModel, _TimestampMixin, metaclass=abc.ABCMeta):
             'sender_key',
         ),
     )
-    sender_public_key_b64: str
     signature: RawSignature
 
-    @model_validator(mode='after')
-    def preserve_base64_sender_key(self) -> Self:
-        raw_key_bytes = self.sender_public_key.public_bytes_raw()
-        b64_key_bytes = urlsafe_b64encode(raw_key_bytes)
-        self.sender_public_key_b64 = b64_key_bytes.decode()
-        return self
+    @cached_property
+    def sender_public_key_b64(self) -> str:
+        raw_bytes = self.sender_public_key.public_bytes_raw()
+        return urlsafe_b64encode(raw_bytes).decode()
 
     @abc.abstractmethod
     def _get_data(self) -> bytes:
@@ -75,8 +72,9 @@ class _FetchResponseElement(BaseModel, _TimestampMixin, metaclass=abc.ABCMeta):
 
 
 class _FetchResponseExchangeKey(_FetchResponseElement):
-    sent_exchange_key: PublicExchangeKey = Field(
+    received_exchange_key: PublicExchangeKey = Field(
         validation_alias=AliasChoices(
+            'received_exchange_key',
             'sent_exchange_key',
             'key',
             'exchange_key',
@@ -93,8 +91,21 @@ class _FetchResponseExchangeKey(_FetchResponseElement):
         ),
     )
 
+    @cached_property
+    def received_exchange_key_b64(self) -> str:
+        raw_bytes = self.received_exchange_key.public_bytes_raw()
+        return urlsafe_b64encode(raw_bytes).decode()
+    
+    @cached_property
+    def initial_exchange_key_b64(self) -> str | None:
+        if self.initial_exchange_key is not None:
+            raw_bytes = self.initial_exchange_key.public_bytes_raw()
+            return urlsafe_b64encode(raw_bytes).decode()
+        else:
+            return None
+
     def _get_data(self) -> bytes:
-        return self.sent_exchange_key.public_bytes_raw()
+        return self.received_exchange_key.public_bytes_raw()
 
 
 class _FetchResponseMessage(_FetchResponseElement, _NonceMixin):

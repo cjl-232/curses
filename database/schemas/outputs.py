@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 
 from database.models import MessageType
-from schema_components.types import VerificationKey
+from schema_components.types import PrivateExchangeKey, VerificationKey
 
 class ContactOutputSchema(BaseModel):
     id: int
@@ -19,6 +19,16 @@ class MessageOutputSchema(BaseModel):
     timestamp: datetime
     message_type: MessageType
     nonce: str
+
+    class Config:
+        from_attributes = True
+
+class SentKeyOutputSchema(BaseModel):
+    id: int
+    contact_id: int
+    private_key: PrivateExchangeKey = Field(
+        validation_alias=AliasChoices('private_key', 'encoded_private_bytes'),
+    )
 
     class Config:
         from_attributes = True

@@ -2,7 +2,10 @@ from datetime import datetime
 from typing import Annotated
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PublicKey
+from cryptography.hazmat.primitives.asymmetric.x25519 import (
+    X25519PrivateKey,
+    X25519PublicKey,
+)
 from pydantic import AfterValidator, BeforeValidator, Field
 
 from schema_components.validators import (
@@ -54,6 +57,11 @@ type ContactName = Annotated[
         max_length=255,
         min_length=1,
     ),
+]
+
+type PrivateExchangeKey = Annotated[
+    X25519PrivateKey,
+    BeforeValidator(lambda x: validate_key_output(x, X25519PublicKey)),
 ]
 
 type PublicExchangeKey = Annotated[
