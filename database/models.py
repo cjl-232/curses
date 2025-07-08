@@ -81,6 +81,8 @@ class ReceivedExchangeKey(Base, _KeyMixin):
 
 
 class SentExchangeKey(Base, _ContactRelationshipMixin):
+    __tablename__ = 'sent_exchange_keys'
+
     encoded_private_bytes: Mapped[str] = mapped_column(
         String(44),
         nullable=False,

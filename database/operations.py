@@ -188,7 +188,8 @@ def store_fetched_data(engine: Engine, response: FetchResponseSchema):
                 session.add(
                     ReceivedExchangeKey(
                         encoded_bytes=exchange_key.received_exchange_key_b64,
-                        matched=False,
+                        matched=False,  # To be matched later
                     ),
                 )
+
         session.commit()
