@@ -30,7 +30,7 @@ class App:
             contacts_menu: ContactsMenu,
             message_log: MessageLog,
             *extra_windows: ManagedWindow,
-        ):
+        ) -> None:
         self.stdscr = stdscr
         self.engine = engine
         self.signature_key = parser.signature_key

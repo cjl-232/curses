@@ -33,7 +33,7 @@ class MessageLog(Log, _SetContactMixin):
             footer: str | None = None,
             bordered: bool = True,
             focusable: bool = True,
-        ):
+        ) -> None:
         super().__init__(layout, padding, title, footer, bordered, focusable)
         if not self.title and contact is not None:
             self.title = contact.name

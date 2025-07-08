@@ -17,9 +17,9 @@ class Log(ManagedWindow):
             footer: str | None = None,
             bordered: bool = True,
             focusable: bool = True,
-        ):
+        ) -> None:
         super().__init__(layout, padding, title, footer, bordered, focusable)
-        self.scroll_index: int = 0 # Scroll upwards
+        self.scroll_index: int = 0  # Scroll counts from the bottom
         self.items: list[tuple[str, str | None, datetime | None]] = list()
         self.item_lines: list[tuple[str, bool]] = list()
 
