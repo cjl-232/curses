@@ -54,9 +54,9 @@ class App:
         self.stdscr.nodelay(True)
         self.stdscr.clear()
         self.stdscr.refresh()
-        state = State.STANDARD
         for window in self.windows:
             window.place(self.stdscr)
+        state = State.STANDARD
         while self.windows and state != State.TERMINATE:
             match state:
                 case State.STANDARD:
@@ -122,7 +122,7 @@ from styling import (
     LayoutUnit,
     Padding,
 )
-from components.menus import PaginatedMenu
+from components.contacts import ContactsMenu
 
 
 
@@ -130,28 +130,19 @@ if __name__ == '__main__':
     def main(stdscr: curses.window):
         app = App(stdscr)
         app.windows.append(
-            PaginatedMenu(
-                items=['a', 'b', 'c', 'd', 'e'] * 30,
+            ContactsMenu(
+                engine=app.engine,
                 layout=Layout(
                     height=LayoutMeasure(
-                        (100, LayoutUnit.PERCENTAGE),
-                        (-10, LayoutUnit.CHARS),
+                        (80, LayoutUnit.PERCENTAGE),
                     ),
                     width=LayoutMeasure(
-                        (50, LayoutUnit.PERCENTAGE),
-                        (20, LayoutUnit.CHARS),
+                        (20, LayoutUnit.PERCENTAGE),
                     ),
-                    top=LayoutMeasure(
-                        (10, LayoutUnit.CHARS),
-                    ),
-                    left=LayoutMeasure(
-                        (50, LayoutUnit.PERCENTAGE),
-                        (-20, LayoutUnit.CHARS),
-                    ),
+                    top=LayoutMeasure(),
+                    left=LayoutMeasure(),
                 ),
-                padding=Padding(1, 2, 3),
-                title='Test Menu',
-                footer='Ctrl-A: Add Contact'
+                padding=Padding(1),
             )
         )
         app.run()
