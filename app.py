@@ -6,21 +6,29 @@
 import curses
 import time
 
+from base64 import urlsafe_b64encode
 from datetime import datetime
 from threading import Thread
 
 import httpx
 
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from sqlalchemy import create_engine, Engine
+from sqlalchemy.orm import Session
 
 from components.contacts import ContactsMenu, ContactsPrompt
 from components.logs import Log
 from components.messages import MessageEntry, MessageLog
-from database.models import Base
-from database.operations import add_contact, store_fetched_data
+from database.models import Base, FernetKey, ReceivedExchangeKey
+from database.operations import (
+    add_contact,
+    get_unmatched_keys,
+    store_fetched_data,
+    store_posted_exchange_key,
+)
 from database.schemas.inputs import ContactInputSchema
 from parser import ClientArgumentParser
-from server.operations import fetch_data
+from server.operations import fetch_data, post_exchange_key
 from settings import settings  # This is causing slowdown. Adjust it.
 from states import State
 
@@ -49,10 +57,40 @@ class App:
     def _fetch_handler(self):
         client = httpx.Client(timeout=settings.server.request_timeout)
         while True:
-            response = fetch_data(self.engine, self.signature_key, client)
+            response = fetch_data(self.engine, client, self.signature_key)
             if response is not None:
                 store_fetched_data(self.engine, response)
             time.sleep(settings.server.fetch_interval)
+
+    def _key_response_handler(self):
+        client = httpx.Client(timeout=settings.server.request_timeout)
+        while True:
+            keys = get_unmatched_keys(self.engine)
+            for key in keys:
+                private_key = X25519PrivateKey.generate()
+                response = post_exchange_key(
+                    client,
+                    self.signature_key,
+                    key.contact.verification_key,
+                    private_key.public_key(),
+                    key.public_key,
+                )
+                
+                shared_secret = private_key.exchange(key.public_key)
+                fernet_obj = FernetKey(
+                    contact_id=key.contact.id,
+                    encoded_bytes=urlsafe_b64encode(shared_secret).decode(),
+                    timestamp=response.data.timestamp,
+                )
+                
+                private_key.exchange(key.public_key)
+                with Session(self.engine) as session:
+                    key_obj = session.get_one(ReceivedExchangeKey, key.id)
+                    key_obj.matched = True
+                    session.add(fernet_obj)
+                    session.commit()                    
+
+            time.sleep(settings.server.key_response_interval)
 
     def _refresh_handler(self):
         while True:
@@ -81,6 +119,8 @@ class App:
             window.place(self.stdscr)
         Thread(target=self._fetch_handler, daemon=True).start()
         Thread(target=self._refresh_handler, daemon=True).start()
+        Thread(target=self._key_response_handler, daemon=True).start()
+        main_client = httpx.Client(timeout=settings.server.request_timeout)
         state = State.STANDARD
         while self.windows and state != State.TERMINATE:
             match state:
@@ -162,6 +202,35 @@ class App:
                     selected_contact = self.contacts_menu.current_contact
                     self.message_log.set_contact(selected_contact)
                     self.message_entry.set_contact(selected_contact)
+                    state = State.STANDARD
+                case State.SEND_EXCHANGE_KEY:
+                    try:
+                        private_exchange_key = X25519PrivateKey.generate()
+                        contact = self.contacts_menu.current_contact
+                        post_exchange_key(
+                            main_client,
+                            self.signature_key,
+                            contact.verification_key,
+                            private_exchange_key.public_key(),
+                        )
+                        store_posted_exchange_key(
+                            self.engine,
+                            contact.id,
+                            private_exchange_key,
+                        )
+                        self.output_log.add_item(
+                            text=f"Posted exchange key to {contact.name}.",
+                            cached=False,
+                            title='Successful Operation',
+                            timestamp=datetime.now(),
+                        )
+                    except Exception as e:
+                        self.output_log.add_item(
+                            text=str(e),
+                            cached=False,
+                            title='Post Exchange Key Error',
+                            timestamp=datetime.now(),
+                        )
                     state = State.STANDARD
                 case State.SEND_MESSAGE:
                     try:

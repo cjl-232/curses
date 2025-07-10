@@ -29,13 +29,15 @@ class ContactsMenu(PaginatedMenu):
         self.contacts = get_contacts(self.engine)
         items = [contact.name for contact in self.contacts]
         title = 'Contacts'
-        footer = 'Ctrl-A: Add Contact'
+        footer = 'Ctrl-A: Add Contact — Ctrl-K: Send Exchange Key'
         super().__init__(items, layout, padding, title, footer)
 
     def handle_key(self, key: int) -> State:
         match key:
             case 1:  # Ctrl-A
                 return State.ADD_CONTACT
+            case 11:  # Ctrl-K
+                return State.SEND_EXCHANGE_KEY
             case curses.KEY_F5:
                 self.refresh()
             case curses.KEY_ENTER | 10:

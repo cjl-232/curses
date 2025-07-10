@@ -122,3 +122,9 @@ class _FetchResponseData(BaseModel):
 
 class FetchResponseSchema(_BaseResponseSchema):
     data: _FetchResponseData
+
+class _PostExchangeKeyResponseData(BaseModel):
+    timestamp: Timestamp
+
+class PostExchangeKeyResponseSchema(_BaseResponseSchema):
+    data: _PostExchangeKeyResponseData

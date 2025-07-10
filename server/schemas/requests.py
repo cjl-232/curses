@@ -14,7 +14,8 @@ class _BasePostRequestSchema(_BaseRequestSchema):
     signature: Base64Signature
 
 class PostExchangeKeyRequestSchema(_BasePostRequestSchema):
-    exchange_key: Base64Key
+    transmitted_exchange_key: Base64Key
+    initial_exchange_key: Base64Key | None = None
 
 class PostMessageRequestSchema(_BasePostRequestSchema):
     encrypted_text: str

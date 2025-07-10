@@ -74,10 +74,10 @@ class FernetKey(Base, _ContactRelationshipMixin, _KeyMixin, _TimestampMixin):
     __tablename__ = 'fernet_keys'
 
 
-class ReceivedExchangeKey(Base, _KeyMixin):
+class ReceivedExchangeKey(Base, _ContactRelationshipMixin, _KeyMixin):
     __tablename__ = 'received_exchange_keys'
     
-    matched: Mapped[bool] = mapped_column(default=False)
+    matched: Mapped[bool] = mapped_column(default=False, index=True)
 
 
 class SentExchangeKey(Base, _ContactRelationshipMixin):

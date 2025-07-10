@@ -61,7 +61,7 @@ type ContactName = Annotated[
 
 type PrivateExchangeKey = Annotated[
     X25519PrivateKey,
-    BeforeValidator(lambda x: validate_key_output(x, X25519PublicKey)),
+    BeforeValidator(lambda x: validate_key_output(x, X25519PrivateKey)),
 ]
 
 type PublicExchangeKey = Annotated[

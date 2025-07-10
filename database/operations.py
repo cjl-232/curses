@@ -17,10 +17,20 @@ from database.models import (
     ReceivedExchangeKey,
     SentExchangeKey,
 )
-from database.schemas.inputs import ContactInputSchema, MessageInputSchema
-from database.schemas.outputs import ContactOutputSchema, SentKeyOutputSchema
+from database.schemas.inputs import (
+    ContactInputSchema,
+    MessageInputSchema,
+    SentKeyInputSchema,
+)
+from database.schemas.outputs import (
+    ContactOutputSchema,
+    SentKeyOutputSchema,
+    ReceivedKeyOutputSchema,
+)
 from exceptions import MissingFernetKey
-from server.schemas.responses import FetchResponseSchema
+from server.schemas.responses import (
+    FetchResponseSchema,
+)
 
 def add_contact(engine: Engine, contact: ContactInputSchema):
     with Session(engine) as session:
@@ -52,6 +62,15 @@ def get_contacts(engine: Engine) -> list[ContactOutputSchema]:
         contacts = session.scalars(query)
         return [ContactOutputSchema.model_validate(x) for x in contacts]
     
+def get_unmatched_keys(engine: Engine) -> list[ReceivedKeyOutputSchema]:
+    query = (
+        select(ReceivedExchangeKey)
+        .where(ReceivedExchangeKey.matched == False)
+    )
+    with Session(engine) as session:
+        keys = session.scalars(query)
+        return [ReceivedKeyOutputSchema.model_validate(x) for x in keys]
+    
 def get_fernet_key(engine: Engine, contact: ContactOutputSchema) -> Fernet:
     """Retrieve the latest Fernet key available for a contact."""
     query = (
@@ -65,9 +84,6 @@ def get_fernet_key(engine: Engine, contact: ContactOutputSchema) -> Fernet:
             msg = f'No shared key exists for {contact.name}.'
             raise MissingFernetKey(msg)
         return Fernet(encoded_bytes)
-    
-def _exchange(private_key: X25519PrivateKey, public_key: X25519PublicKey):
-    return urlsafe_b64encode(private_key.exchange(public_key)).decode()
 
     
 def store_message(
@@ -78,6 +94,8 @@ def store_message(
     """Encrypt a message and prepare it for posting."""
 
 def store_fetched_data(engine: Engine, response: FetchResponseSchema):
+    def exchange(private_key: X25519PrivateKey, public_key: X25519PublicKey):
+        return urlsafe_b64encode(private_key.exchange(public_key)).decode()
     # Cached functions are used for data retrieval.
     @cache
     def get_contact_id(key: str) -> int | None:
@@ -114,7 +132,7 @@ def store_fetched_data(engine: Engine, response: FetchResponseSchema):
         # Sent key retrieval cannot occur outside the session.
         def get_sent_key(b64_key: str) -> SentKeyOutputSchema | None:
             query = (
-                select(SentExchangeKey.id)
+                select(SentExchangeKey)
                 .where(SentExchangeKey.encoded_public_bytes == b64_key)
             )
             obj = session.scalar(query)
@@ -164,9 +182,9 @@ def store_fetched_data(engine: Engine, response: FetchResponseSchema):
                 sent_key = get_sent_key(exchange_key.initial_exchange_key_b64)
                 if sent_key is None:
                     continue
-                elif sent_key.contact_id != contact_id:
+                elif sent_key.contact.id != contact_id:
                     continue
-                shared_secret = _exchange(
+                shared_secret = exchange(
                     sent_key.private_key,
                     exchange_key.received_exchange_key,
                 )
@@ -181,6 +199,7 @@ def store_fetched_data(engine: Engine, response: FetchResponseSchema):
                     ReceivedExchangeKey(
                         encoded_bytes=exchange_key.received_exchange_key_b64,
                         matched=True,
+                        contact_id=contact_id,
                     ),
                 )
                 session.delete(session.get(SentExchangeKey, sent_key.id))
@@ -189,7 +208,22 @@ def store_fetched_data(engine: Engine, response: FetchResponseSchema):
                     ReceivedExchangeKey(
                         encoded_bytes=exchange_key.received_exchange_key_b64,
                         matched=False,  # To be matched later
+                        contact_id=contact_id,
                     ),
                 )
 
+        session.commit()
+
+def store_posted_exchange_key(
+        engine: Engine,
+        contact_id: int,
+        private_exchange_key: X25519PrivateKey,
+    ):
+    sent_key_input = SentKeyInputSchema.model_validate({
+        'encoded_private_bytes': private_exchange_key,
+        'encoded_public_bytes': private_exchange_key.public_key(),
+        'contact_id': contact_id,
+    })
+    with Session(engine) as session:
+        session.add(SentExchangeKey(**sent_key_input.model_dump()))
         session.commit()
