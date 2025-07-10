@@ -47,14 +47,18 @@ class ContactsMenu(PaginatedMenu):
         return State.STANDARD
 
     def refresh(self):
-        initial_contact_id = self.contacts[self.cursor_index].id
+        if self.contacts:
+            initial_contact_id = self.contacts[self.cursor_index].id
+        else:
+            initial_contact_id = None
         self.contacts = get_contacts(self.engine)
         self.items = [x.name for x in self.contacts]
-        if self.contacts[self.cursor_index].id != initial_contact_id:
-            for index, contact in enumerate(self.contacts):
-                if contact.id == initial_contact_id:
-                    self.cursor_index = index
-                    break
+        if initial_contact_id is not None:
+            if self.contacts[self.cursor_index].id != initial_contact_id:
+                for index, contact in enumerate(self.contacts):
+                    if contact.id == initial_contact_id:
+                        self.cursor_index = index
+                        break
 
     @property
     def current_contact(self):
