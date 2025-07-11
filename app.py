@@ -22,13 +22,15 @@ from components.messages import MessageEntry, MessageLog
 from database.models import Base, FernetKey, ReceivedExchangeKey
 from database.operations import (
     add_contact,
+    get_fernet_key,
     get_unmatched_keys,
     store_fetched_data,
     store_posted_exchange_key,
+    store_posted_message,
 )
 from database.schemas.inputs import ContactInputSchema
 from parser import ClientArgumentParser
-from server.operations import fetch_data, post_exchange_key
+from server.operations import fetch_data, post_exchange_key, post_message
 from settings import settings  # This is causing slowdown. Adjust it.
 from states import State
 
@@ -233,15 +235,41 @@ class App:
                         )
                     state = State.STANDARD
                 case State.SEND_MESSAGE:
-                    try:
-                        pass
-                    except Exception as e:
-                        self.output_log.add_item(
-                            text=str(e),
-                            cached=False,
-                            title='Add Contact Error',
-                            timestamp=datetime.now(),
-                        )
+                    if self.message_entry.input:
+                        contact = self.contacts_menu.current_contact
+                        try:
+                            key = get_fernet_key(self.engine, contact)
+                            encrypted_text = key.encrypt(
+                                self.message_entry.input.encode(),
+                            )
+                            response = post_message(
+                                main_client,
+                                self.signature_key,
+                                contact.verification_key,
+                                encrypted_text,
+                            )
+                            store_posted_message(
+                                self.engine,
+                                self.message_entry.input,
+                                contact.id,
+                                response,
+                            )
+                            self.output_log.add_item(
+                                text=f"Posted message to {contact.name}.",
+                                cached=False,
+                                title='Successful Operation',
+                                timestamp=datetime.now(),
+                            )
+                            self.message_entry.input = ''
+                            self.message_entry.draw_required = True
+                            self.message_entry.cursor_index = 0
+                        except Exception as e:
+                            self.output_log.add_item(
+                                text=str(e),
+                                cached=False,
+                                title='Post Message Error',
+                                timestamp=datetime.now(),
+                            )
                     state = State.STANDARD
                 case _:
                     state = State.STANDARD

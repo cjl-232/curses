@@ -30,6 +30,7 @@ from database.schemas.outputs import (
 from exceptions import MissingFernetKey
 from server.schemas.responses import (
     FetchResponseSchema,
+    PostMessageResponseSchema
 )
 
 def add_contact(engine: Engine, contact: ContactInputSchema):
@@ -120,7 +121,6 @@ def store_fetched_data(engine: Engine, response: FetchResponseSchema):
         )
         with Session(engine) as session:
             return bool(session.scalar(query))
-    @cache
     def nonce_exists(nonce: str) -> bool:
         query = exists().where(Message.nonce == nonce).select()
         with Session(engine) as session:
@@ -147,7 +147,7 @@ def store_fetched_data(engine: Engine, response: FetchResponseSchema):
                 continue
             elif get_contact_id(message.sender_public_key_b64) is None:
                 continue
-            elif not nonce_exists(message.nonce):
+            elif nonce_exists(message.nonce):
                 continue
             contact_id = get_contact_id(message.sender_public_key_b64)
             # Attempt to decrypt each message.
@@ -226,4 +226,21 @@ def store_posted_exchange_key(
     })
     with Session(engine) as session:
         session.add(SentExchangeKey(**sent_key_input.model_dump()))
+        session.commit()
+
+def store_posted_message(
+        engine: Engine,
+        plaintext: str,
+        contact_id: int,
+        response: PostMessageResponseSchema,
+    ):
+    input = MessageInputSchema.model_validate({
+        'text': plaintext,
+        'contact_id': contact_id,
+        'timestamp': response.data.timestamp,
+        'nonce': response.data.nonce,
+        'message_type': MessageType.SENT,
+    })
+    with Session(engine) as session:
+        session.add(Message(**input.model_dump()))
         session.commit()

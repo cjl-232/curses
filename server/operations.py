@@ -13,10 +13,12 @@ from exceptions import FailedRequest
 from server.schemas.requests import (
     FetchRequestSchema,
     PostExchangeKeyRequestSchema,
+    PostMessageRequestSchema,
 )
 from server.schemas.responses import (
     FetchResponseSchema,
     PostExchangeKeyResponseSchema,
+    PostMessageResponseSchema,
 )
 from settings import settings
 
@@ -62,3 +64,23 @@ def post_exchange_key(
     if not raw_response.is_success:
         raise FailedRequest('Post exchange key request failed.', raw_response)
     return PostExchangeKeyResponseSchema.model_validate(raw_response.json())
+
+def post_message(
+        client: httpx.Client,
+        signature_key: Ed25519PrivateKey,
+        recipient_public_key: Ed25519PublicKey,
+        encrypted_text: bytes,
+    ) -> PostMessageResponseSchema:
+    request = PostMessageRequestSchema.model_validate({
+        'public_key': signature_key.public_key(),
+        'recipient_public_key': recipient_public_key,
+        'encrypted_text': encrypted_text,
+        'signature': signature_key.sign(encrypted_text),
+    })
+    raw_response = client.post(
+        url=settings.server.url.post_message_url,
+        json=request.model_dump(),
+    )
+    if not raw_response.is_success:
+        raise FailedRequest('Post message request failed.', raw_response)
+    return PostMessageResponseSchema.model_validate(raw_response.json())
