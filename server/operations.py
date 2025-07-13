@@ -1,3 +1,5 @@
+from typing import Any
+
 import httpx
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -5,11 +7,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PublicKey,
 )
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PublicKey
-from sqlalchemy import Engine, select
-from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
-from database.models import Contact
-from exceptions import FailedRequest
 from server.schemas.requests import (
     FetchRequestSchema,
     PostExchangeKeyRequestSchema,
@@ -22,26 +21,34 @@ from server.schemas.responses import (
 )
 from settings import settings
 
+def _process_request[T: BaseModel, U: BaseModel](
+        client: httpx.Client,
+        method: str,
+        url: str,
+        request_model: type[T],
+        response_model: type[U],
+        **kwargs: Any,
+    ) -> U:
+    request = request_model.model_validate(kwargs)
+    response = client.request(method, url, json=request.model_dump())
+    response.raise_for_status()
+    return response_model.model_validate(response.json())
+
 def fetch_data(
-        engine: Engine,
         client: httpx.Client,
         signature_key: Ed25519PrivateKey,
-    ) -> FetchResponseSchema | None:
+        contact_keys: list[str],
+    ) -> FetchResponseSchema:
     """Fetch all data stored on the server that is addressed to the user."""
-    with Session(engine) as session:
-        request = FetchRequestSchema.model_validate({
-            'public_key': signature_key.public_key(),
-            'sender_keys': session.scalars(select(Contact.verification_key)),
-        })
-    if not request.sender_keys:
-        return None
-    raw_response = client.post(
+    return _process_request(
+        client=client,
+        method='POST',
         url=settings.server.url.fetch_data_url,
-        json=request.model_dump(),
+        request_model=FetchRequestSchema,
+        response_model=FetchResponseSchema,
+        public_key=signature_key.public_key(),
+        sender_keys=contact_keys,
     )
-    if not raw_response.is_success:
-        raise FailedRequest('Fetch request failed.', raw_response)
-    return FetchResponseSchema.model_validate(raw_response.json())
 
 def post_exchange_key(
         client: httpx.Client,
@@ -50,20 +57,19 @@ def post_exchange_key(
         exchange_key: X25519PublicKey,
         initial_exchange_key: X25519PublicKey | None = None,
     ) -> PostExchangeKeyResponseSchema:
-    request = PostExchangeKeyRequestSchema.model_validate({
-        'public_key': signature_key.public_key(),
-        'recipient_public_key': recipient_public_key,
-        'transmitted_exchange_key': exchange_key,
-        'signature': signature_key.sign(exchange_key.public_bytes_raw()),
-        'initial_exchange_key': initial_exchange_key,
-    })
-    raw_response = client.post(
+    """Post a single exchange key to the server."""
+    return _process_request(
+        client=client,
+        method='POST',
         url=settings.server.url.post_exchange_key_url,
-        json=request.model_dump(),
+        request_model=PostExchangeKeyRequestSchema,
+        response_model=PostExchangeKeyResponseSchema,
+        public_key=signature_key.public_key(),
+        recipient_public_key=recipient_public_key,
+        transmitted_exchange_key=exchange_key,
+        signature=signature_key.sign(exchange_key.public_bytes_raw()),
+        initial_exchange_key=initial_exchange_key,
     )
-    if not raw_response.is_success:
-        raise FailedRequest('Post exchange key request failed.', raw_response)
-    return PostExchangeKeyResponseSchema.model_validate(raw_response.json())
 
 def post_message(
         client: httpx.Client,
@@ -71,16 +77,15 @@ def post_message(
         recipient_public_key: Ed25519PublicKey,
         encrypted_text: bytes,
     ) -> PostMessageResponseSchema:
-    request = PostMessageRequestSchema.model_validate({
-        'public_key': signature_key.public_key(),
-        'recipient_public_key': recipient_public_key,
-        'encrypted_text': encrypted_text,
-        'signature': signature_key.sign(encrypted_text),
-    })
-    raw_response = client.post(
+    """Post a single message to the server."""
+    return _process_request(
+        client=client,
+        method='POST',
         url=settings.server.url.post_message_url,
-        json=request.model_dump(),
+        request_model=PostMessageRequestSchema,
+        response_model=PostMessageResponseSchema,
+        public_key=signature_key.public_key(),
+        recipient_public_key=recipient_public_key,
+        encrypted_text=encrypted_text,
+        signature=signature_key.sign(encrypted_text),
     )
-    if not raw_response.is_success:
-        raise FailedRequest('Post message request failed.', raw_response)
-    return PostMessageResponseSchema.model_validate(raw_response.json())
