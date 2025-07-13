@@ -64,7 +64,7 @@ class Log(ManagedWindow):
     def add_item(
             self,
             text: str,
-            cached: bool,
+            cached: bool = False,
             title: str | None = None,
             timestamp: datetime | None = None,
         ):
