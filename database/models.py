@@ -9,7 +9,6 @@ from sqlalchemy.types import DateTime, String, Text
 def _values_callable(x: type[Enum]):
     return [i.value for i in x]
 
-
 class _ContactRelationshipMixin:
     contact_id: Mapped[int] = mapped_column(ForeignKey(column='contacts.id'))
 
@@ -45,6 +44,10 @@ class Contact(Base):
         String(44),
         unique=True,
         nullable=False,
+    )
+    fernet_keys: Mapped[list['FernetKey']] = relationship(
+        argument='FernetKey',
+        order_by='FernetKey.timestamp.desc()',
     )
 
 
