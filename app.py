@@ -16,7 +16,7 @@ from sqlalchemy import create_engine, Engine
 from sqlalchemy.orm import Session
 
 
-from components.contacts import ContactsMenu
+from components.contacts import ContactsMenu, ContactsPrompt
 from components.logs import Log
 from components.messages import MessageEntry, MessageLog
 from database.models import Base, Contact, FernetKey, ReceivedExchangeKey
@@ -26,6 +26,7 @@ from database.operations import (
     store_fetched_data,
     store_posted_message,
 )
+from database.schemas.inputs import ContactInputSchema
 from database.schemas.outputs import ContactOutputSchema
 from parser import ClientArgumentParser
 from server.operations import fetch_data, post_exchange_key, post_message
@@ -69,6 +70,7 @@ class App:
             self.selected_contact = None
         self.connected = False
         self.database_write_lock = Lock()
+        self.message_log_write_lock = Lock()
         self.output_log_write_lock = Lock()
 
     def _ping_server(self, client: httpx.Client) -> bool:
@@ -95,6 +97,8 @@ class App:
             response = fetch_data(client, self.signature_key, contact_keys)
             with self.database_write_lock:
                 store_fetched_data(self.engine, response)
+            with self.message_log_write_lock:
+                self.message_log.update()
         except httpx.HTTPStatusError as e:
             with self.output_log_write_lock:
                 self.output_log.add_item(
@@ -166,6 +170,8 @@ class App:
 
     def _standard_state_handler(self, key: int) -> State:
         match key:
+            case 1:   # Ctrl-A
+                return State.ADD_CONTACT
             case 9:   # Tab
                 return State.NEXT_WINDOW
             case curses.KEY_BTAB:
@@ -176,6 +182,52 @@ class App:
                 return State.TERMINATE
             case _:
                 return self.windows[self.focus_index].handle_key(key)
+            
+    def _add_contact(self) -> None:
+        self.stdscr.clear()
+        self.stdscr.refresh()
+        prompt = ContactsPrompt()
+        prompt.place(self.stdscr)
+        state = State.PROMPT_ACTIVE
+        while state == State.PROMPT_ACTIVE:
+            if prompt.draw_required:
+                prompt.draw()
+                prompt.draw_required = False
+            key = self.stdscr.getch()
+            if key == curses.KEY_RESIZE:
+                prompt.place(self.stdscr)
+            else:
+                state = prompt.handle_key(key)
+        if state != State.PROMPT_SUBMITTED:
+            return
+        name, public_key = prompt.retrieve_contact()
+        contact = ContactInputSchema.model_validate({
+            'name': name,
+            'verification_key': public_key,
+        })
+        try:
+            with self.database_write_lock:
+                with Session(self.engine) as session:
+                    session.add(Contact(**contact.model_dump()))
+                    session.commit()
+            with self.output_log_write_lock:
+                self.output_log.add_item(
+                    title='Add Contact Success',
+                    timestamp=datetime.now(),
+                    text=f"Added new contact '{name}'.",
+                )
+        except Exception as e:
+            with self.output_log_write_lock:
+                self.output_log.add_item(
+                    title='Add Contact Error',
+                    timestamp=datetime.now(),
+                    text=str(e),
+                )
+        self.stdscr.erase()
+        self.stdscr.refresh()
+        for window in self.windows:
+            window.draw_required = True
+        self.contacts_menu.refresh()
 
     def _send_message(self, client: httpx.Client) -> None:
         if self.selected_contact is None or not self.message_entry.input:
@@ -214,6 +266,16 @@ class App:
                         response=response,
                     )
                 self.message_entry.input = ''
+                self.message_entry.cursor_index = 0
+                self.message_entry.draw_required = True
+                with self.output_log_write_lock:
+                    self.output_log.add_item(
+                        title='Message Post Success',
+                        timestamp=datetime.now(),
+                        text=f'Message sent to {self.selected_contact.name}.',
+                    )
+                with self.message_log_write_lock:
+                    self.message_log.update()
             except httpx.TimeoutException:
                 with self.output_log_write_lock:
                     self.output_log.add_item(
@@ -277,12 +339,14 @@ class App:
                 self.stdscr.refresh()
                 for window in self.windows:
                     window.place(self.stdscr)
-            case State.SEND_MESSAGE:
-                self._send_message(client)
+            case State.ADD_CONTACT:
+                self._add_contact()
             case State.SELECT_CONTACT:
                 self.selected_contact = self.contacts_menu.current_contact
                 self.message_log.set_contact(self.selected_contact)
                 self.message_entry.set_contact(self.selected_contact)
+            case State.SEND_MESSAGE:
+                self._send_message(client)
             case _:
                 pass
 

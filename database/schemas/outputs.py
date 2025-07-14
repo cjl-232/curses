@@ -13,6 +13,7 @@ from schema_components.types import (
 class FernetKeyOutputSchema(BaseModel):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
+        from_attributes=True,
     )
 
     key: FernetKey = Field(

@@ -62,7 +62,7 @@ def validate_key_output[T: _PrivateKey | _PublicKey | Fernet](
     elif issubclass(key_type, (Ed25519PublicKey, X25519PublicKey)):
         return cast(T, key_type.from_public_bytes(raw_bytes))
     else:
-        return key_type(raw_bytes)
+        return key_type(urlsafe_b64encode(raw_bytes))
 
 
 

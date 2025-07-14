@@ -34,8 +34,6 @@ class ContactsMenu(PaginatedMenu):
 
     def handle_key(self, key: int) -> State:
         match key:
-            case 1:  # Ctrl-A
-                return State.ADD_CONTACT
             case 11:  # Ctrl-K
                 return State.SEND_EXCHANGE_KEY
             case curses.KEY_F5:
