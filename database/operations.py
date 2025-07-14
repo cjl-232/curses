@@ -1,7 +1,6 @@
 from base64 import urlsafe_b64encode
 from functools import lru_cache
 
-from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from sqlalchemy import Engine, exists, select
 from sqlalchemy.orm import Session
@@ -20,6 +19,7 @@ from database.schemas.inputs import (
     SentKeyInputSchema,
 )
 from database.schemas.outputs import (
+    BaseContactOutputSchema,
     ContactOutputSchema,
     ReceivedKeyOutputSchema,
     SentKeyOutputSchema,
@@ -58,14 +58,14 @@ def get_contact_keys(engine: Engine) -> list[str]:
         return list(session.scalars(select(Contact.verification_key)))
 
 
-def get_contacts(engine: Engine) -> list[ContactOutputSchema]:
+def get_contacts(engine: Engine) -> list[BaseContactOutputSchema]:
     query = (
         select(Contact)
         .order_by(Contact.name)
     )
     with Session(engine) as session:
         contacts = session.scalars(query)
-        return [ContactOutputSchema.model_validate(x) for x in contacts]
+        return [BaseContactOutputSchema.model_validate(x) for x in contacts]
 
 
 def get_unmatched_keys(engine: Engine) -> list[ReceivedKeyOutputSchema]:

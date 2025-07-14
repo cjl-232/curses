@@ -73,8 +73,9 @@ class Message(Base, _ContactRelationshipMixin, _TimestampMixin):
     )
 
 
-class FernetKey(Base, _ContactRelationshipMixin, _KeyMixin, _TimestampMixin):
+class FernetKey(Base, _KeyMixin, _TimestampMixin):
     __tablename__ = 'fernet_keys'
+    contact_id: Mapped[int] = mapped_column(ForeignKey(column='contacts.id'))
 
 
 class ReceivedExchangeKey(Base, _ContactRelationshipMixin, _KeyMixin):
