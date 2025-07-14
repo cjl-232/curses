@@ -24,6 +24,7 @@ from database.operations import (
     get_contact_keys,
     get_unmatched_keys,
     store_fetched_data,
+    store_posted_exchange_key,
     store_posted_message,
 )
 from database.schemas.inputs import ContactInputSchema
@@ -86,7 +87,7 @@ class App:
                     text='Successfully connected to the server.',
                 )
             return True
-        except httpx.TimeoutException:
+        except Exception:
             return False
 
     def _fetch_handler(self, client: httpx.Client) -> None:
@@ -229,13 +230,72 @@ class App:
             window.draw_required = True
         self.contacts_menu.refresh()
 
-    def _send_message(self, client: httpx.Client) -> None:
+
+
+    def _post_exchange_key(self, client: httpx.Client) -> None:
+        if not self.contacts_menu.contacts:
+            return
+        elif not self.connected:
+            with self.output_log_write_lock:
+                self.output_log.add_item(
+                    title='Exchange Key Post Error - No Connection',
+                    timestamp=datetime.now(),
+                    text=(
+                        'No exchange keys can be sent until a connection to '
+                        'the server is established.'
+                    ),
+                )
+            return
+        contact = self.contacts_menu.current_contact
+        private_exchange_key = X25519PrivateKey.generate()
+        try:
+            post_exchange_key(
+                client=client,
+                signature_key=self.signature_key,
+                recipient_public_key=contact.verification_key,
+                exchange_key=private_exchange_key.public_key(),
+            )
+            with self.database_write_lock:
+                store_posted_exchange_key(
+                    engine=self.engine,
+                    contact_id=contact.id,
+                    private_exchange_key=private_exchange_key,
+                )
+            with self.output_log_write_lock:
+                self.output_log.add_item(
+                    title='Exchange Key Post Success',
+                    timestamp=datetime.now(),
+                    text=f"Posted exchange key to {contact.name}.",
+                )
+        except httpx.TimeoutException:
+            with self.output_log_write_lock:
+                self.output_log.add_item(
+                    title='Exchange Key Post Error',
+                    timestamp=datetime.now(),
+                    text='Exchange key post request timed out.',
+                )
+        except httpx.HTTPStatusError as e:
+            with self.output_log_write_lock:
+                self.output_log.add_item(
+                    title='Exchange Key Post Error - Bad Response',
+                    timestamp=datetime.now(),
+                    text=str(e),
+                )
+        except Exception as e:
+            with self.output_log_write_lock:
+                self.output_log.add_item(
+                    title='Exchange Key Post Error - Unhandled Exception',
+                    timestamp=datetime.now(),
+                    text=str(e),
+                )
+
+    def _post_message(self, client: httpx.Client) -> None:
         if self.selected_contact is None or not self.message_entry.input:
             return
         elif not self.connected:
             with self.output_log_write_lock:
                 self.output_log.add_item(
-                    title='Message Send Error - No Connection',
+                    title='Message Post Error - No Connection',
                     timestamp=datetime.now(),
                     text=(
                         'No messages can be sent until a connection to the '
@@ -279,32 +339,32 @@ class App:
             except httpx.TimeoutException:
                 with self.output_log_write_lock:
                     self.output_log.add_item(
-                        title='Message Send Error - Request Timed Out',
+                        title='Message Post Error - Request Timed Out',
                         timestamp=datetime.now(),
                         text='Message post request timed out.',
                     )
             except httpx.HTTPStatusError as e:
                 with self.output_log_write_lock:
                     self.output_log.add_item(
-                        title='Message Send Error - Bad Response',
+                        title='Message Post Error - Bad Response',
                         timestamp=datetime.now(),
                         text=str(e),
                     )
             except Exception as e:
                 with self.output_log_write_lock:
                     self.output_log.add_item(
-                        title='Message Send Error - Unhandled Exception',
+                        title='Message Post Error - Unhandled Exception',
                         timestamp=datetime.now(),
                         text=str(e),
                     )
         else:
             with self.output_log_write_lock:
                 self.output_log.add_item(
-                    title='Message Send Error - No Encryption Key',
+                    title='Message Post Error - No Encryption Key',
                     timestamp=datetime.now(),
                     text=(
-                        f'No messages can be sent until before a successful '
-                        f'key exchange with {selected_contact.name}.'
+                        f'No messages can be posted before a successful key '
+                        f'exchange with {selected_contact.name}.'
                     ),
                 )
 
@@ -342,11 +402,14 @@ class App:
             case State.ADD_CONTACT:
                 self._add_contact()
             case State.SELECT_CONTACT:
-                self.selected_contact = self.contacts_menu.current_contact
-                self.message_log.set_contact(self.selected_contact)
-                self.message_entry.set_contact(self.selected_contact)
+                if self.contacts_menu.contacts:
+                    self.selected_contact = self.contacts_menu.current_contact
+                    self.message_log.set_contact(self.selected_contact)
+                    self.message_entry.set_contact(self.selected_contact)
+            case State.SEND_EXCHANGE_KEY:
+                self._post_exchange_key(client)
             case State.SEND_MESSAGE:
-                self._send_message(client)
+                self._post_message(client)
             case _:
                 pass
 
