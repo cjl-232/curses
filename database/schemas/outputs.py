@@ -11,6 +11,10 @@ from schema_components.types import (
 )
 
 class FernetKeyOutputSchema(BaseModel):
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+    )
+
     key: FernetKey = Field(
         validation_alias=AliasChoices('key', 'encoded_bytes'),
     )
