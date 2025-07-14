@@ -180,6 +180,17 @@ class App:
     def _send_message(self, client: httpx.Client) -> None:
         if self.selected_contact is None or not self.message_entry.input:
             return
+        elif not self.connected:
+            with self.output_log_write_lock:
+                self.output_log.add_item(
+                    title='Message Send Error - No Connection',
+                    timestamp=datetime.now(),
+                    text=(
+                        'No messages can be sent until a connection to the '
+                        'server is established.'
+                    ),
+                )
+            return
         with Session(self.engine) as session:
             obj = session.get(Contact, self.selected_contact.id)
         if obj is None:
