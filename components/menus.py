@@ -60,7 +60,7 @@ class PaginatedMenu(ManagedWindow, metaclass=abc.ABCMeta):
                 self.window.attroff(curses.A_REVERSE)
             else:
                 self.window.addnstr(y_pos + index, x_pos, item, width)
-        page_label = f'Page {max(1, current_page_index + 1)} of {page_count}'
+        page_label = f'Page {current_page_index + 1} of {max(1, page_count)}'
         self.window.attron(curses.A_ITALIC)
         self.window.addnstr(y_pos + items_per_page, x_pos, page_label, width)
         self.window.attroff(curses.A_ITALIC)
