@@ -1,105 +1,160 @@
-#TODO replace settings with cached... ideally also property?
-#TODO figure this out... derive from prompts, get a result property that takes
-# into account NUMERIC choices as well. Text prompt vs choice prompt.
-# Implement as a enum in the PromptNode field?
-
+# TODO scrap most of what I've done, keep all server operations besides
+# _run_server_operations in the server.operations module, just make sure logging
+# occurs in _run_server_operations
 import curses
 import time
 
 from base64 import urlsafe_b64encode
 from datetime import datetime
-from threading import Thread
+from threading import Lock, Thread
 
 import httpx
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from sqlalchemy import create_engine, Engine
 from sqlalchemy.orm import Session
 
-from components.contacts import ContactsMenu, ContactsPrompt
+
+from components.contacts import ContactsMenu
 from components.logs import Log
 from components.messages import MessageEntry, MessageLog
-from database.models import Base, FernetKey, ReceivedExchangeKey
+from database.models import Base, Contact, FernetKey, ReceivedExchangeKey
 from database.operations import (
-    add_contact,
-    get_fernet_key,
+    get_contact_keys,
     get_unmatched_keys,
     store_fetched_data,
-    store_posted_exchange_key,
     store_posted_message,
 )
-from database.schemas.inputs import ContactInputSchema
+from database.schemas.outputs import ContactOutputSchema
 from parser import ClientArgumentParser
 from server.operations import fetch_data, post_exchange_key, post_message
-from settings import settings  # This is causing slowdown. Adjust it.
+from settings import settings
 from states import State
-
-parser = ClientArgumentParser()
+from styling import Layout, LayoutMeasure, LayoutUnit, Padding
 
 class App:
     def __init__(
             self,
-            stdscr: curses.window,
             engine: Engine,
+            signature_key: Ed25519PrivateKey,
             contacts_menu: ContactsMenu,
             message_log: MessageLog,
             message_entry: MessageEntry,
             output_log: Log,
+            stdscr: curses.window,
         ) -> None:
-        self.stdscr = stdscr
         self.engine = engine
-        self.signature_key = parser.signature_key
+        self.signature_key = signature_key
+        self.stdscr = stdscr
         self.contacts_menu = contacts_menu
         self.message_log = message_log
         self.message_entry = message_entry
         self.output_log = output_log
         self.windows = [contacts_menu, message_log, message_entry, output_log]
         self.focus_index = 0
+        self.selected_contact_id = 0
+        self.connected = False
+        self.database_write_lock = Lock()
+        self.output_log_write_lock = Lock()
 
-    def _fetch_handler(self):
-        client = httpx.Client(timeout=settings.server.request_timeout)
-        while True:
-            response = fetch_data(self.engine, client, self.signature_key)
-            if response is not None:
+    def _ping_server(self, client: httpx.Client) -> bool:
+        try:
+            client.get(
+                url=settings.server.url.ping_url,
+                timeout=settings.server.ping_timeout,
+            )
+            with self.output_log_write_lock:
+                self.output_log.add_item(
+                    title='Connection Established',
+                    timestamp=datetime.now(),
+                    text=(
+                        f'Successfully connected to the server at '
+                        f'{settings.server.url.base_url}.'
+                    ),
+                )
+            return True
+        except httpx.TimeoutException:
+            return False
+
+    def _fetch_handler(self, client: httpx.Client) -> None:
+        contact_keys = get_contact_keys(self.engine)
+        if not contact_keys:
+            return
+        try:
+            response = fetch_data(client, self.signature_key, contact_keys)
+            with self.database_write_lock:
                 store_fetched_data(self.engine, response)
+        except httpx.HTTPStatusError as e:
+            with self.output_log_write_lock:
+                self.output_log.add_item(
+                    title='Bad Response',
+                    timestamp=datetime.now(),
+                    text=str(e),
+                )
+
+    def _key_response_handler(self, client: httpx.Client) -> None:
+        unmatched_keys = get_unmatched_keys(self.engine)
+        for key in unmatched_keys:
+            private_key = X25519PrivateKey.generate()
+            shared_secret = private_key.exchange(key.public_key)
+            encoded_shared_secret = urlsafe_b64encode(shared_secret)
+            try:
+                response = post_exchange_key(
+                    client=client,
+                    signature_key=self.signature_key,
+                    recipient_public_key=key.contact.verification_key,
+                    exchange_key=private_key.public_key(),
+                    initial_exchange_key=key.public_key,
+                )
+            except httpx.HTTPStatusError as e:
+                with self.output_log_write_lock:
+                    self.output_log.add_item(
+                        title='Bad Response',
+                        timestamp=datetime.now(),
+                        text=str(e),
+                    )
+                continue
+            with self.database_write_lock:
+                with Session(self.engine) as session:
+                    matched_key = session.get_one(ReceivedExchangeKey, key.id)
+                    matched_key.matched = True
+                    session.add(
+                        FernetKey(
+                            encoded_bytes=encoded_shared_secret.decode(),
+                            contact_id=key.contact.id,
+                            timestamp=response.data.timestamp,
+                        )
+                    )
+                    session.commit()
+
+    def _run_server_operations(self):
+        client = httpx.Client()
+        while True:
+            if not self.connected:
+                self.connected = self._ping_server(client)
+                continue
+            try:
+                self._fetch_handler(client)
+                self._key_response_handler(client)
+            except httpx.TimeoutException:
+                with self.output_log_write_lock:
+                    self.output_log.add_item(
+                        title='Server Connection Error',
+                        timestamp=datetime.now(),
+                        text='Request timed out. Attempting to reconnect...',
+                    )
+                self.connected = False
+            except Exception as e:
+                with self.output_log_write_lock:
+                    self.output_log.add_item(
+                        title='Unhandled Server Error',
+                        timestamp=datetime.now(),
+                        text=str(e),
+                    )
             time.sleep(settings.server.fetch_interval)
 
-    def _key_response_handler(self):
-        client = httpx.Client(timeout=settings.server.request_timeout)
-        while True:
-            keys = get_unmatched_keys(self.engine)
-            for key in keys:
-                private_key = X25519PrivateKey.generate()
-                response = post_exchange_key(
-                    client,
-                    self.signature_key,
-                    key.contact.verification_key,
-                    private_key.public_key(),
-                    key.public_key,
-                )
-                
-                shared_secret = private_key.exchange(key.public_key)
-                fernet_obj = FernetKey(
-                    contact_id=key.contact.id,
-                    encoded_bytes=urlsafe_b64encode(shared_secret).decode(),
-                    timestamp=response.data.timestamp,
-                )
-                
-                private_key.exchange(key.public_key)
-                with Session(self.engine) as session:
-                    key_obj = session.get_one(ReceivedExchangeKey, key.id)
-                    key_obj.matched = True
-                    session.add(fernet_obj)
-                    session.commit()                    
-
-            time.sleep(settings.server.key_response_interval)
-
-    def _refresh_handler(self):
-        while True:
-            self.message_log.update()
-            time.sleep(1.0)
-
-    def _handle_key_standard(self, key: int) -> State:
+    def _standard_state_handler(self, key: int) -> State:
         match key:
             case 9:   # Tab
                 return State.NEXT_WINDOW
@@ -112,188 +167,128 @@ class App:
             case _:
                 return self.windows[self.focus_index].handle_key(key)
 
+    def _send_message(self, client: httpx.Client) -> None:
+        if not self.message_entry.input:
+            return
+        with Session(self.engine) as session:
+            obj = session.get(Contact, self.selected_contact_id)
+        if obj is None:
+            return
+        selected_contact = ContactOutputSchema.model_validate(obj)
+        if selected_contact.fernet_keys:
+            fernet_key = selected_contact.fernet_keys[0].key
+            plaintext = self.message_entry.input
+            try:
+                response = post_message(
+                    client=client,
+                    signature_key=self.signature_key,
+                    recipient_public_key=selected_contact.verification_key,
+                    encrypted_text=fernet_key.encrypt(plaintext.encode()),
+                )
+                with self.database_write_lock:
+                    store_posted_message(
+                        engine=self.engine,
+                        plaintext=plaintext,
+                        contact_id=selected_contact.id,
+                        response=response,
+                    )
+                self.message_entry.input = ''
+            except httpx.TimeoutException:
+                with self.output_log_write_lock:
+                    self.output_log.add_item(
+                        title='Message Send Error - Request Timed Out',
+                        timestamp=datetime.now(),
+                        text='Message post request timed out.',
+                    )
+            except httpx.HTTPStatusError as e:
+                with self.output_log_write_lock:
+                    self.output_log.add_item(
+                        title='Message Send Error - Bad Response',
+                        timestamp=datetime.now(),
+                        text=str(e),
+                    )
+            except Exception as e:
+                with self.output_log_write_lock:
+                    self.output_log.add_item(
+                        title='Message Send Error - Unhandled Exception',
+                        timestamp=datetime.now(),
+                        text=str(e),
+                    )
+        else:
+            with self.output_log_write_lock:
+                self.output_log.add_item(
+                    title='Message Send Error - No Encryption Key',
+                    timestamp=datetime.now(),
+                    text=(
+                        f'No messages can be sent until before a successful '
+                        f'key exchange with {selected_contact.name}.'
+                    ),
+                )
+
+    def _loop_iteration(self, state: State, client: httpx.Client) -> State:
+        for index, window in enumerate(self.windows):
+            if window.draw_required:
+                window.draw(index == self.focus_index)
+                window.draw_required = False
+        match state:
+            case State.STANDARD:
+                return self._standard_state_handler(self.stdscr.getch())
+            case State.NEXT_WINDOW:
+                for _ in range(len(self.windows)):
+                    self.focus_index += 1
+                    if self.focus_index >= len(self.windows):
+                        self.focus_index = 0
+                    if self.windows[self.focus_index].focusable:
+                        break
+            case State.PREV_WINDOW:
+                for _ in range(len(self.windows)):
+                    self.focus_index -= 1
+                    if self.focus_index < 0:
+                        self.focus_index = len(self.windows) - 1
+                    if self.windows[self.focus_index].focusable:
+                        break
+            case State.RESIZE:
+                self.stdscr.clear()
+                self.stdscr.refresh()
+                for window in self.windows:
+                    window.place(self.stdscr)
+            case State.SEND_MESSAGE:
+                self._send_message(client)
+            case _:
+                pass
+
+        return State.STANDARD
+
+
+    
     def run(self):
+        # Initiate all secondary threads.
+        Thread(target=self._run_server_operations, daemon=True).start()
+        # Set up the initial state and begin the main loop.
+        state = State.STANDARD
+        client = httpx.Client(timeout=settings.server.request_timeout)
         self.stdscr.keypad(True)
         self.stdscr.nodelay(True)
-        self.stdscr.clear()
-        self.stdscr.refresh()
-        for window in self.windows:
-            window.place(self.stdscr)
-        Thread(target=self._fetch_handler, daemon=True).start()
-        Thread(target=self._refresh_handler, daemon=True).start()
-        Thread(target=self._key_response_handler, daemon=True).start()
-        main_client = httpx.Client(timeout=settings.server.request_timeout)
-        state = State.STANDARD
-        while self.windows and state != State.TERMINATE:
-            match state:
-                case State.STANDARD:
-                    for index, window in enumerate(self.windows):
-                        if window.draw_required:
-                            window.draw(index == self.focus_index)
-                    state = self._handle_key_standard(self.stdscr.getch())
-                case State.NEXT_WINDOW:
-                    for _ in range(len(self.windows)):
-                        self.focus_index += 1
-                        if self.focus_index >= len(self.windows):
-                            self.focus_index = 0
-                        if self.windows[self.focus_index].focusable:
-                            break
-                    state = State.STANDARD
-                case State.PREV_WINDOW:
-                    for _ in range(len(self.windows)):
-                        self.focus_index -= 1
-                        if self.focus_index < 0:
-                            self.focus_index = len(self.windows) - 1
-                        if self.windows[self.focus_index].focusable:
-                            break
-                    state = State.STANDARD
-                case State.RESIZE:
-                    self.stdscr.erase()
-                    self.stdscr.refresh()
-                    for window in self.windows:
-                        window.place(self.stdscr)
-                    state = State.STANDARD
-                case State.ADD_CONTACT:
-                    self.stdscr.erase()
-                    self.stdscr.refresh()
-                    state = State.PROMPT_ACTIVE
-                    prompt = ContactsPrompt()
-                    prompt.place(self.stdscr)
-                    while state == State.PROMPT_ACTIVE:
-                        if prompt.draw_required:
-                            prompt.draw()
-                            prompt.draw_required = False
-                        key = self.stdscr.getch()
-                        if key == curses.KEY_RESIZE:
-                            prompt.place(self.stdscr)
-                        else:
-                            state = prompt.handle_key(key)
-                    match state:
-                        case State.PROMPT_SUBMITTED:
-                            try:
-                                name, public_key = prompt.retrieve_contact()
-                                contact = ContactInputSchema.model_validate({
-                                    'name': name,
-                                    'verification_key': public_key,
-                                })
-                                add_contact(self.engine, contact)
-                                self.output_log.add_item(
-                                    text=f"Added new contact '{name}'.",
-                                    cached=False,
-                                    title='Successful Operation',
-                                    timestamp=datetime.now(),
-                                )
-                            except Exception as e:
-                                self.output_log.add_item(
-                                    text=str(e),
-                                    cached=False,
-                                    title='Add Contact Error',
-                                    timestamp=datetime.now(),
-                                )
-                            self.contacts_menu.refresh()
-
-
-                        case _:
-                            pass
-                    self.stdscr.erase()
-                    self.stdscr.refresh()
-                    for window in self.windows:
-                        window.draw_required = True
-                    state = State.STANDARD
-                case State.SELECT_CONTACT:
-                    selected_contact = self.contacts_menu.current_contact
-                    self.message_log.set_contact(selected_contact)
-                    self.message_entry.set_contact(selected_contact)
-                    state = State.STANDARD
-                case State.SEND_EXCHANGE_KEY:
-                    try:
-                        private_exchange_key = X25519PrivateKey.generate()
-                        contact = self.contacts_menu.current_contact
-                        post_exchange_key(
-                            main_client,
-                            self.signature_key,
-                            contact.verification_key,
-                            private_exchange_key.public_key(),
-                        )
-                        store_posted_exchange_key(
-                            self.engine,
-                            contact.id,
-                            private_exchange_key,
-                        )
-                        self.output_log.add_item(
-                            text=f"Posted exchange key to {contact.name}.",
-                            cached=False,
-                            title='Successful Operation',
-                            timestamp=datetime.now(),
-                        )
-                    except Exception as e:
-                        self.output_log.add_item(
-                            text=str(e),
-                            cached=False,
-                            title='Post Exchange Key Error',
-                            timestamp=datetime.now(),
-                        )
-                    state = State.STANDARD
-                case State.SEND_MESSAGE:
-                    if self.message_entry.input:
-                        contact = self.contacts_menu.current_contact
-                        try:
-                            key = get_fernet_key(self.engine, contact)
-                            encrypted_text = key.encrypt(
-                                self.message_entry.input.encode(),
-                            )
-                            response = post_message(
-                                main_client,
-                                self.signature_key,
-                                contact.verification_key,
-                                encrypted_text,
-                            )
-                            store_posted_message(
-                                self.engine,
-                                self.message_entry.input,
-                                contact.id,
-                                response,
-                            )
-                            self.output_log.add_item(
-                                text=f"Posted message to {contact.name}.",
-                                cached=False,
-                                title='Successful Operation',
-                                timestamp=datetime.now(),
-                            )
-                            self.message_entry.input = ''
-                            self.message_entry.draw_required = True
-                            self.message_entry.cursor_index = 0
-                        except Exception as e:
-                            self.output_log.add_item(
-                                text=str(e),
-                                cached=False,
-                                title='Post Message Error',
-                                timestamp=datetime.now(),
-                            )
-                    state = State.STANDARD
-                case _:
-                    state = State.STANDARD
-        self.stdscr.clear()
-
-            
-
-from styling import (
-    Layout,
-    LayoutMeasure,
-    LayoutUnit,
-    Padding,
-)
-from components.contacts import ContactsMenu
-
+        try:
+            self.stdscr.clear()
+            self.stdscr.refresh()
+            for window in self.windows:
+                window.place(self.stdscr)
+            while state != State.TERMINATE:
+                state = self._loop_iteration(state, client)
+        except KeyboardInterrupt:
+            pass
 
 
 if __name__ == '__main__':
+    parser = ClientArgumentParser()
+    signature_key = parser.signature_key    
+    engine = create_engine(settings.local_database.url)
+    Base.metadata.create_all(engine)
     def main(stdscr: curses.window):
-        engine = create_engine(settings.local_database.url)
-        Base.metadata.create_all(engine)
         app = App(
-            stdscr,
             engine,
+            signature_key,
             ContactsMenu(
                 engine=engine,
                 layout=Layout(
@@ -361,9 +356,11 @@ if __name__ == '__main__':
                 ),
                 padding=Padding(0, 1),
             ),
+            stdscr,
         )
         app.run()
     curses.wrapper(main)
 
-# TODO go back to having a windowmanager class that the app is derived from
-# Use the app class constructor to make the windows based on settings
+
+
+
