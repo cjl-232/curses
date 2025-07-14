@@ -126,6 +126,12 @@ class Entry(ManagedWindow):
                     self.input = head + tail
                     self.cursor_index -= 1
                     self.draw_required = True
+            case 330 | 462:  # Delete
+                if self.cursor_index < len(self.input):
+                    head = self.input[:self.cursor_index]
+                    tail = self.input[self.cursor_index + 1:]
+                    self.input = head + tail
+                    self.draw_required = True
             case _:
                 if 0 <= key <= 0x10ffff and chr(key).isascii():
                     if self.cursor_index == len(self.input):
