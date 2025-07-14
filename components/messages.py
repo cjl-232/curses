@@ -6,13 +6,16 @@ from sqlalchemy.orm import Session
 from components.entries import Entry
 from components.logs import Log
 from database.models import Message, MessageType
-from database.schemas.outputs import ContactOutputSchema, MessageOutputSchema
+from database.schemas.outputs import (
+    BaseContactOutputSchema,
+    MessageOutputSchema,
+)
 from states import State
 from styling import Layout, Padding
 
 
 class _SetContactMixin:
-    def set_contact(self, contact: ContactOutputSchema | None) -> bool:
+    def set_contact(self, contact: BaseContactOutputSchema | None) -> bool:
         if self.contact != contact:
             self.contact = contact
             return True
@@ -22,7 +25,7 @@ class MessageLog(Log, _SetContactMixin):
     def __init__(
             self,
             engine: Engine,
-            contact: ContactOutputSchema | None,
+            contact: BaseContactOutputSchema | None,
             layout: Layout,
             padding: Padding | None = None,
             title: str | None = None,
@@ -49,7 +52,7 @@ class MessageLog(Log, _SetContactMixin):
             case _:
                 return super().handle_key(key)
 
-    def set_contact(self, contact: ContactOutputSchema | None) -> bool:
+    def set_contact(self, contact: BaseContactOutputSchema | None) -> bool:
         contact_replaced = super().set_contact(contact)
         if contact_replaced:
             if self.contact is not None:
@@ -91,7 +94,7 @@ class MessageEntry(Entry, _SetContactMixin):
     def __init__(
             self,
             engine: Engine,
-            contact: ContactOutputSchema | None,
+            contact: BaseContactOutputSchema | None,
             layout: Layout,
             padding: Padding | None = None,
             title: str | None = None,
@@ -113,7 +116,7 @@ class MessageEntry(Entry, _SetContactMixin):
                     return super().handle_key(key)
         return State.STANDARD
 
-    def set_contact(self, contact: ContactOutputSchema | None) -> bool:
+    def set_contact(self, contact: BaseContactOutputSchema | None) -> bool:
         if self.contact is not None:
             self.stored_inputs[self.contact.id] = self.input
         contact_replaced = super().set_contact(contact)

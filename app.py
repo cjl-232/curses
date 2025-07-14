@@ -51,9 +51,22 @@ class App:
         self.message_log = message_log
         self.message_entry = message_entry
         self.output_log = output_log
+        self.output_log.add_item(
+            title='Connecting',
+            timestamp=datetime.now(),
+            text=(
+                f'Attempting to connect to the server at '
+                f'{settings.server.url.base_url}...'
+            ),
+        )
         self.windows = [contacts_menu, message_log, message_entry, output_log]
         self.focus_index = 0
-        self.selected_contact_id = 0
+        if self.contacts_menu.contacts:
+            self.selected_contact = self.contacts_menu.contacts[0]
+            self.message_log.set_contact(self.selected_contact)
+            self.message_entry.set_contact(self.selected_contact)
+        else:
+            self.selected_contact = None
         self.connected = False
         self.database_write_lock = Lock()
         self.output_log_write_lock = Lock()
@@ -68,10 +81,7 @@ class App:
                 self.output_log.add_item(
                     title='Connection Established',
                     timestamp=datetime.now(),
-                    text=(
-                        f'Successfully connected to the server at '
-                        f'{settings.server.url.base_url}.'
-                    ),
+                    text='Successfully connected to the server.',
                 )
             return True
         except httpx.TimeoutException:
@@ -168,10 +178,10 @@ class App:
                 return self.windows[self.focus_index].handle_key(key)
 
     def _send_message(self, client: httpx.Client) -> None:
-        if not self.message_entry.input:
+        if self.selected_contact is None or not self.message_entry.input:
             return
         with Session(self.engine) as session:
-            obj = session.get(Contact, self.selected_contact_id)
+            obj = session.get(Contact, self.selected_contact.id)
         if obj is None:
             return
         selected_contact = ContactOutputSchema.model_validate(obj)
@@ -234,18 +244,22 @@ class App:
             case State.STANDARD:
                 return self._standard_state_handler(self.stdscr.getch())
             case State.NEXT_WINDOW:
+                self.windows[self.focus_index].draw_required = True
                 for _ in range(len(self.windows)):
                     self.focus_index += 1
                     if self.focus_index >= len(self.windows):
                         self.focus_index = 0
                     if self.windows[self.focus_index].focusable:
+                        self.windows[self.focus_index].draw_required = True
                         break
             case State.PREV_WINDOW:
+                self.windows[self.focus_index].draw_required = True
                 for _ in range(len(self.windows)):
                     self.focus_index -= 1
                     if self.focus_index < 0:
                         self.focus_index = len(self.windows) - 1
                     if self.windows[self.focus_index].focusable:
+                        self.windows[self.focus_index].draw_required = True
                         break
             case State.RESIZE:
                 self.stdscr.clear()
@@ -254,6 +268,10 @@ class App:
                     window.place(self.stdscr)
             case State.SEND_MESSAGE:
                 self._send_message(client)
+            case State.SELECT_CONTACT:
+                self.selected_contact = self.contacts_menu.current_contact
+                self.message_log.set_contact(self.selected_contact)
+                self.message_entry.set_contact(self.selected_contact)
             case _:
                 pass
 

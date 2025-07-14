@@ -68,6 +68,8 @@ class Log(ManagedWindow):
             title: str | None = None,
             timestamp: datetime | None = None,
         ):
+        if not cached:
+            self.items.append((text, title, timestamp))
         width = self._get_internal_size()[1]
         if width <= 0:
             return
@@ -84,8 +86,6 @@ class Log(ManagedWindow):
             self.item_lines += [(header, True)]
             if self.scroll_index > 0:
                 self.scroll_index += 1
-        if not cached:
-            self.items.append((text, title, timestamp))
         self.item_lines += [(x, False) for x in wrapped_text]
         if self.scroll_index > 0:
             self.scroll_index += len(wrapped_text)

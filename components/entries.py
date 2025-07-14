@@ -19,6 +19,7 @@ class Entry(ManagedWindow):
         self.cursor_index = 0
 
     def draw(self, focused: bool):
+        self.window.erase()
         # Set cursor visibility.
         curses.curs_set(1 if focused else 0)
 
