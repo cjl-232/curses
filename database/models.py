@@ -48,6 +48,7 @@ class Contact(Base):
     fernet_keys: Mapped[list['FernetKey']] = relationship(
         argument='FernetKey',
         order_by='FernetKey.timestamp.desc()',
+        lazy='selectin',
     )
 
 
