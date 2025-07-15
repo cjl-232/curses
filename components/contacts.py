@@ -29,7 +29,7 @@ class ContactsMenu(PaginatedMenu):
         self.contacts = get_contacts(self.engine)
         items = [contact.name for contact in self.contacts]
         title = 'Contacts'
-        footer = 'Ctrl-A: Add Contact — Ctrl-K: Send Exchange Key'
+        footer = 'Ctrl-K: Send Exchange Key'
         super().__init__(items, layout, padding, title, footer)
 
     def handle_key(self, key: int) -> State:
