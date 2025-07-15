@@ -27,7 +27,10 @@ from database.operations import (
     store_posted_message,
 )
 from database.schemas.inputs import ContactInputSchema
-from database.schemas.outputs import ContactOutputSchema
+from database.schemas.outputs import (
+    BaseContactOutputSchema,
+    ContactOutputSchema,
+)
 from parser import ClientArgumentParser
 from server.operations import fetch_data, post_exchange_key, post_message
 from settings import settings
@@ -186,7 +189,7 @@ class App:
             case _:
                 return self.windows[self.focus_index].handle_key(key)
             
-    def _add_contact(self) -> None:
+    def _add_contact(self, client: httpx.Client) -> None:
         self.stdscr.clear()
         self.stdscr.refresh()
         prompt = ContactsPrompt()
@@ -210,7 +213,10 @@ class App:
             try:
                 with self.database_write_lock:
                     with Session(self.engine) as session:
-                        session.add(Contact(**contact.model_dump()))
+                        obj = Contact(**contact.model_dump())
+                        session.add(obj)
+                        session.flush()
+                        contact = BaseContactOutputSchema.model_validate(obj)
                         session.commit()
                 with self.output_log_write_lock:
                     self.output_log.add_item(
@@ -218,6 +224,10 @@ class App:
                         timestamp=datetime.now(),
                         text=f"Added new contact '{name}'.",
                     )
+                if self.selected_contact is None:
+                    self.selected_contact = contact
+                    self.message_log.set_contact(contact)
+                    self.message_entry.set_contact(contact)
             except Exception as e:
                 with self.output_log_write_lock:
                     self.output_log.add_item(
@@ -401,7 +411,7 @@ class App:
                 for window in self.windows:
                     window.place(self.stdscr)
             case State.ADD_CONTACT:
-                self._add_contact()
+                self._add_contact(client)
             case State.SELECT_CONTACT:
                 if self.contacts_menu.contacts:
                     self.selected_contact = self.contacts_menu.current_contact
@@ -415,8 +425,6 @@ class App:
                 pass
 
         return State.STANDARD
-
-
     
     def run(self):
         # Initiate all secondary threads.
@@ -542,6 +550,7 @@ if __name__ == '__main__':
                         left=LayoutMeasure(),
                     ),
                     padding=Padding(1, 2),
+                    attributes=[curses.A_BOLD],
                 ),
                 Textbox(
                     text_lines=[
