@@ -137,7 +137,7 @@ def _handle_exchange_key_element(
         session.add(
             FernetKey(
                 contact_id=contact.id,
-                encoded_bytes=shared_secret,
+                encoded_bytes=urlsafe_b64encode(shared_secret).decode(),
                 timestamp=element.timestamp,
             )
         )
