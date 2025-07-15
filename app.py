@@ -201,31 +201,30 @@ class App:
                 prompt.place(self.stdscr)
             else:
                 state = prompt.handle_key(key)
-        if state != State.PROMPT_SUBMITTED:
-            return
-        name, public_key = prompt.retrieve_contact()
-        contact = ContactInputSchema.model_validate({
-            'name': name,
-            'verification_key': public_key,
-        })
-        try:
-            with self.database_write_lock:
-                with Session(self.engine) as session:
-                    session.add(Contact(**contact.model_dump()))
-                    session.commit()
-            with self.output_log_write_lock:
-                self.output_log.add_item(
-                    title='Add Contact Success',
-                    timestamp=datetime.now(),
-                    text=f"Added new contact '{name}'.",
-                )
-        except Exception as e:
-            with self.output_log_write_lock:
-                self.output_log.add_item(
-                    title='Add Contact Error',
-                    timestamp=datetime.now(),
-                    text=str(e),
-                )
+        if state == State.PROMPT_SUBMITTED:
+            name, public_key = prompt.retrieve_contact()
+            contact = ContactInputSchema.model_validate({
+                'name': name,
+                'verification_key': public_key,
+            })
+            try:
+                with self.database_write_lock:
+                    with Session(self.engine) as session:
+                        session.add(Contact(**contact.model_dump()))
+                        session.commit()
+                with self.output_log_write_lock:
+                    self.output_log.add_item(
+                        title='Add Contact Success',
+                        timestamp=datetime.now(),
+                        text=f"Added new contact '{name}'.",
+                    )
+            except Exception as e:
+                with self.output_log_write_lock:
+                    self.output_log.add_item(
+                        title='Add Contact Error',
+                        timestamp=datetime.now(),
+                        text=str(e),
+                    )
         self.stdscr.erase()
         self.stdscr.refresh()
         for window in self.windows:
