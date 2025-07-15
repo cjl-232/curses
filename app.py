@@ -1,6 +1,4 @@
-# TODO scrap most of what I've done, keep all server operations besides
-# _run_server_operations in the server.operations module, just make sure logging
-# occurs in _run_server_operations
+# TODO consider separating out focusable/nonfocusable classes
 import curses
 import time
 
@@ -19,6 +17,7 @@ from sqlalchemy.orm import Session
 from components.contacts import ContactsMenu, ContactsPrompt
 from components.logs import Log
 from components.messages import MessageEntry, MessageLog
+from components.textboxes import Alignment, Textbox
 from database.models import Base, Contact, FernetKey, ReceivedExchangeKey
 from database.operations import (
     get_contact_keys,
@@ -40,11 +39,12 @@ class App:
             self,
             engine: Engine,
             signature_key: Ed25519PrivateKey,
+            stdscr: curses.window,
             contacts_menu: ContactsMenu,
             message_log: MessageLog,
             message_entry: MessageEntry,
             output_log: Log,
-            stdscr: curses.window,
+            textboxes: list[Textbox] | None = None,
         ) -> None:
         self.engine = engine
         self.signature_key = signature_key
@@ -62,6 +62,8 @@ class App:
             ),
         )
         self.windows = [contacts_menu, message_log, message_entry, output_log]
+        if textboxes:
+            self.windows += textboxes
         self.focus_index = 0
         if self.contacts_menu.contacts:
             self.selected_contact = self.contacts_menu.contacts[0]
@@ -438,18 +440,21 @@ class App:
 
 if __name__ == '__main__':
     parser = ClientArgumentParser()
-    signature_key = parser.signature_key    
+    signature_key = parser.signature_key
+    public_key = signature_key.public_key()
+    public_key_b64 = urlsafe_b64encode(public_key.public_bytes_raw()).decode()
     engine = create_engine(settings.local_database.url)
     Base.metadata.create_all(engine)
     def main(stdscr: curses.window):
         app = App(
             engine,
             signature_key,
+            stdscr,
             ContactsMenu(
                 engine=engine,
                 layout=Layout(
                     height=LayoutMeasure(
-                        (80, LayoutUnit.PERCENTAGE),
+                        (75, LayoutUnit.PERCENTAGE),
                     ),
                     width=LayoutMeasure(
                         (20, LayoutUnit.PERCENTAGE),
@@ -464,7 +469,7 @@ if __name__ == '__main__':
                 contact=None,
                 layout=Layout(
                     height=LayoutMeasure(
-                        (80, LayoutUnit.PERCENTAGE),
+                        (75, LayoutUnit.PERCENTAGE),
                         (-4, LayoutUnit.CHARS),
                     ),
                     width=LayoutMeasure(
@@ -488,7 +493,7 @@ if __name__ == '__main__':
                         (80, LayoutUnit.PERCENTAGE),
                     ),
                     top=LayoutMeasure(
-                        (80, LayoutUnit.PERCENTAGE),
+                        (75, LayoutUnit.PERCENTAGE),
                         (-4, LayoutUnit.CHARS),
                     ),
                     left=LayoutMeasure(
@@ -500,19 +505,71 @@ if __name__ == '__main__':
             Log(
                 layout=Layout(
                     height=LayoutMeasure(
-                        (20, LayoutUnit.CHARS),
+                        (25, LayoutUnit.PERCENTAGE),
+                        (-4, LayoutUnit.CHARS),
                     ),
                     width=LayoutMeasure(
                         (100, LayoutUnit.PERCENTAGE),
                     ),
                     top=LayoutMeasure(
-                        (80, LayoutUnit.PERCENTAGE),
+                        (75, LayoutUnit.PERCENTAGE),
                     ),
                     left=LayoutMeasure(),
                 ),
                 padding=Padding(0, 1),
             ),
-            stdscr,
+            [
+                Textbox(
+                    text_lines=[
+                        'Controls:',
+                        ' | '.join([
+                            'Ctrl-A: Add Contact',
+                            'Esc: Close',
+                        ]),
+                    ],
+                    alignment=Alignment.LEFT,
+                    layout=Layout(
+                        height=LayoutMeasure(
+                            (4, LayoutUnit.CHARS),
+                        ),
+                        width=LayoutMeasure(
+                            (100, LayoutUnit.PERCENTAGE),
+                            (-48, LayoutUnit.CHARS),
+                        ),
+                        top=LayoutMeasure(
+                            (100, LayoutUnit.PERCENTAGE),
+                            (-4, LayoutUnit.CHARS),
+                        ),
+                        left=LayoutMeasure(),
+                    ),
+                    padding=Padding(1, 2),
+                ),
+                Textbox(
+                    text_lines=[
+                        'Your public key:',
+                        public_key_b64,
+                    ],
+                    alignment=Alignment.LEFT,
+                    layout=Layout(
+                        height=LayoutMeasure(
+                            (4, LayoutUnit.CHARS),
+                        ),
+                        width=LayoutMeasure(
+                            (48, LayoutUnit.CHARS),
+                        ),
+                        top=LayoutMeasure(
+                            (100, LayoutUnit.PERCENTAGE),
+                            (-4, LayoutUnit.CHARS),
+                        ),
+                        left=LayoutMeasure(
+                            (100, LayoutUnit.PERCENTAGE),
+                            (-48, LayoutUnit.CHARS),
+                        ),
+                    ),
+                    padding=Padding(1, 2),
+                    attributes=[curses.A_BOLD],
+                ),
+            ],
         )
         app.run()
     curses.wrapper(main)

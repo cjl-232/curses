@@ -90,3 +90,9 @@ class ManagedWindow(metaclass=abc.ABCMeta):
             height -= 2
             width -= 2
         return max(0, height), max(0, width)
+    
+    def _get_top_left(self) -> tuple[int, int]:
+        if not self.bordered:
+            return self.padding.top, self.padding.left
+        else:
+            return self.padding.top + 1, self.padding.left + 1
