@@ -93,7 +93,7 @@ class _KeyBindingsModel(BaseModel):
     down_keys: _KeyBindingList = ['s']
     left_keys: _KeyBindingList = ['a']
     right_keys: _KeyBindingList = ['d']
-    
+
     @cached_property
     def up_key_set(self):
         return set([curses.KEY_UP] + [ord(x) for x in self.up_keys])
@@ -106,7 +106,7 @@ class _KeyBindingsModel(BaseModel):
     @cached_property
     def right_key_set(self):
         return set([curses.KEY_RIGHT] + [ord(x) for x in self.right_keys])
-    
+
 class _UrlSettingsModel(BaseModel):
     scheme: str = 'https'
     subdomain: str | None = Field(default=None)

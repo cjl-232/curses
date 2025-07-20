@@ -84,7 +84,7 @@ class TextPromptNode(_PromptNode):
                     self.input += chr(key)
                     return _PromptState.CHANGED
         return _PromptState.STANDARD
-    
+
 
 class Prompt(ManagedWindow):
     def __init__(self, node: _PromptNode, *nodes: _PromptNode) -> None:
@@ -120,11 +120,11 @@ class Prompt(ManagedWindow):
         if isinstance(node, TextPromptNode):
             self.window.addch(y_pos + len(lines) - 1, width - 1, ' ')
             self.window.move(y_pos + len(lines) - 1, width - 1)
-        
+
         # Refresh the window.
         self.window.refresh()
         self.draw_required = False
-    
+
     def handle_key(self, key: int) -> State:
         match self.nodes[self.node_index].handle_key(key):
             case _PromptState.STANDARD:

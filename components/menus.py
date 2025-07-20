@@ -36,13 +36,13 @@ class PaginatedMenu(ManagedWindow, metaclass=abc.ABCMeta):
         if height <= 1 or width <= 0:
             self.window.refresh()
             return
-        
+
         # Otherwise, draw the border.
         self._draw_external(focused)
-        
+
         # Work out the current cursor position.
         page_count = math.ceil(len(self.items) / items_per_page)
-        current_page_index = self.cursor_index // items_per_page 
+        current_page_index = self.cursor_index // items_per_page
         relative_cursor_index = self.cursor_index % items_per_page
 
         # Extract the relevant items.

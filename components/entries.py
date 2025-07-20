@@ -29,7 +29,7 @@ class Entry(ManagedWindow):
             self.window.refresh()
             self.draw_required = False
             return
-        
+
         # Draw the border.
         self._draw_external(focused)
 
@@ -57,7 +57,7 @@ class Entry(ManagedWindow):
         if len(content) < height * width:
             left_padding = ' ' * (height * width - len(content))
             content += left_padding
-        
+
         # Draw this to the window.
         for i in range(last_row - first_row + 1):
             self.window.addstr(
@@ -75,7 +75,7 @@ class Entry(ManagedWindow):
         # Refresh the window.
         self.window.refresh()
         self.draw_required = False
-    
+
     def handle_key(self, key: int) -> State:
         height, width = self._get_internal_size()
         match key:

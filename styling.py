@@ -48,11 +48,11 @@ class Padding:
             case _:
                 values = args[:4]
         self.top, self.bottom, self.left, self.right = values
-    
+
     @property
     def vertical_sum(self) -> int:
         return self.top + self.bottom
-    
+
     @property
     def horizontal_sum(self) -> int:
         return self.left + self.right

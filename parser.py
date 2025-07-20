@@ -68,7 +68,7 @@ def _file_to_key(
             raise e
     if not isinstance(key, Ed25519PrivateKey):
         raise ValueError(f'File represents a non-Ed25519 private key')
-    return key       
+    return key
 
 class ClientArgumentParser(ArgumentParser):
     def __init__(self) -> None:

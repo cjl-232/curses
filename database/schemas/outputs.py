@@ -45,7 +45,7 @@ class MessageOutputSchema(BaseModel):
     timestamp: datetime
     message_type: MessageType
     nonce: str
-    
+
 
 class ReceivedKeyOutputSchema(BaseModel):
     model_config = ConfigDict(
@@ -58,7 +58,7 @@ class ReceivedKeyOutputSchema(BaseModel):
     public_key: PublicExchangeKey = Field(
         validation_alias=AliasChoices('public_key', 'encoded_bytes'),
     )
-    
+
 
 class SentKeyOutputSchema(BaseModel):
     model_config = ConfigDict(

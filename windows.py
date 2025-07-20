@@ -25,7 +25,7 @@ class ManagedWindow(metaclass=abc.ABCMeta):
         self.focusable = focusable
         self.draw_required = False
         self.window = curses.newwin(1, 1)
-            
+
     @abc.abstractmethod
     def draw(self, focused: bool):
         """
@@ -90,7 +90,7 @@ class ManagedWindow(metaclass=abc.ABCMeta):
             height -= 2
             width -= 2
         return max(0, height), max(0, width)
-    
+
     def _get_top_left(self) -> tuple[int, int]:
         if not self.bordered:
             return self.padding.top, self.padding.left

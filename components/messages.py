@@ -106,7 +106,7 @@ class MessageEntry(Entry, _SetContactMixin):
         self.engine = engine
         self.contact = contact
         self.stored_inputs: dict[int, str] = dict()
-        
+
     def handle_key(self, key: int) -> State:
         if self.contact is not None:
             match key:

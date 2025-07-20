@@ -45,7 +45,7 @@ class _FetchResponseElement(BaseModel, _TimestampMixin, metaclass=abc.ABCMeta):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
     )
-    
+
     sender_key: VerificationKey = Field(
         validation_alias=AliasChoices(
             'sender_key',
@@ -99,7 +99,7 @@ class FetchResponseExchangeKey(_FetchResponseElement):
     def exchange_key_b64(self) -> str:
         raw_bytes = self.exchange_key.public_bytes_raw()
         return urlsafe_b64encode(raw_bytes).decode()
-    
+
     @cached_property
     def initial_key_b64(self) -> str | None:
         if self.initial_key is not None:

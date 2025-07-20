@@ -86,7 +86,7 @@ class ContactsPrompt(Prompt):
             message='Enter the public key or its source.',
         )
         super().__init__(self.name_node, self.key_method_node, self.key_node)
-    
+
     def retrieve_contact(self) -> tuple[str, Ed25519PublicKey]:
         name = self.name_node.input
         match self.key_method_node.input:
@@ -107,6 +107,3 @@ class ContactsPrompt(Prompt):
         if not isinstance(public_key, Ed25519PublicKey):
             raise ValueError('An Ed25519 public key is required.')
         return name, public_key
-
-
-

@@ -39,7 +39,7 @@ def validate_key_input(value: _KeyInputType) -> str:
 def validate_key_list_input(value: list[_KeyInputType]) -> list[str]:
     return [validate_key_input(x) for x in value]
 
-    
+
 def validate_signature_input(value: str | _BytesLike) -> str:
     if isinstance(value, str):
         value = urlsafe_b64decode(value)
@@ -70,7 +70,7 @@ def validate_key_output[T: _PrivateKey | _PublicKey | Fernet](
 
 
 
-    
+
 def validate_signature_output(value: str) -> bytes:
     raw_bytes = urlsafe_b64decode(value)
     if len(raw_bytes) != 64:
