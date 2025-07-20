@@ -1,5 +1,3 @@
-# TODO implement absolute index and derive relative from it. Other way round is bad
-
 import curses
 
 from base64 import urlsafe_b64decode
