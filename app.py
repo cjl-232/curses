@@ -147,7 +147,7 @@ class App:
                         )
                     )
                     session.commit()
-        
+
     def _new_contact_key_handler(self, client: httpx.Client):
         new_contacts = get_contacts_without_keys(self.engine)
         for contact in new_contacts:
@@ -194,7 +194,7 @@ class App:
                 return State.TERMINATE
             case _:
                 return self.windows[self.focus_index].handle_key(key)
-            
+
     def _add_contact(self, client: httpx.Client) -> None:
         self.stdscr.clear()
         self.stdscr.refresh()
@@ -434,7 +434,7 @@ class App:
                 pass
 
         return State.STANDARD
-    
+
     def run(self):
         # Initiate all secondary threads.
         Thread(target=self._run_server_operations, daemon=True).start()
@@ -590,7 +590,3 @@ if __name__ == '__main__':
         )
         app.run()
     curses.wrapper(main)
-
-
-
-
