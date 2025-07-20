@@ -77,6 +77,17 @@ def get_unmatched_keys(engine: Engine) -> list[ReceivedKeyOutputSchema]:
     with Session(engine) as session:
         keys = session.scalars(query)
         return [ReceivedKeyOutputSchema.model_validate(x) for x in keys]
+    
+def get_contacts_without_keys(engine: Engine) -> list[BaseContactOutputSchema]:
+    query = (
+        select(Contact)
+        .where(~Contact.fernet_keys.any())
+        .where(~Contact.sent_exchange_keys.any())
+        .order_by(Contact.name)
+    )
+    with Session(engine) as session:
+        contacts = session.scalars(query)
+        return [BaseContactOutputSchema.model_validate(x) for x in contacts]
 
 
 @lru_cache(maxsize=256)

@@ -1,4 +1,3 @@
-# TODO consider separating out focusable/nonfocusable classes
 import curses
 import time
 
@@ -21,6 +20,7 @@ from components.textboxes import Alignment, Textbox
 from database.models import Base, Contact, FernetKey, ReceivedExchangeKey
 from database.operations import (
     get_contact_keys,
+    get_contacts_without_keys,
     get_unmatched_keys,
     store_fetched_data,
     store_posted_exchange_key,
@@ -147,6 +147,11 @@ class App:
                         )
                     )
                     session.commit()
+        
+    def _new_contact_key_handler(self, client: httpx.Client):
+        new_contacts = get_contacts_without_keys(self.engine)
+        for contact in new_contacts:
+            self._post_exchange_key(client, contact)
 
     def _run_server_operations(self):
         client = httpx.Client()
@@ -157,6 +162,7 @@ class App:
             try:
                 self._fetch_handler(client)
                 self._key_response_handler(client)
+                self._new_contact_key_handler(client)
             except httpx.TimeoutException:
                 with self.output_log_write_lock:
                     self.output_log.add_item(
@@ -241,12 +247,12 @@ class App:
             window.draw_required = True
         self.contacts_menu.refresh()
 
-
-
-    def _post_exchange_key(self, client: httpx.Client) -> None:
-        if not self.contacts_menu.contacts:
-            return
-        elif not self.connected:
+    def _post_exchange_key(
+            self,
+            client: httpx.Client,
+            contact: BaseContactOutputSchema,
+        ) -> None:
+        if not self.connected:
             with self.output_log_write_lock:
                 self.output_log.add_item(
                     title='Exchange Key Post Error - No Connection',
@@ -257,7 +263,6 @@ class App:
                     ),
                 )
             return
-        contact = self.contacts_menu.current_contact
         private_exchange_key = X25519PrivateKey.generate()
         try:
             post_exchange_key(
@@ -418,7 +423,11 @@ class App:
                     self.message_log.set_contact(self.selected_contact)
                     self.message_entry.set_contact(self.selected_contact)
             case State.SEND_EXCHANGE_KEY:
-                self._post_exchange_key(client)
+                if self.contacts_menu.contacts:
+                    self._post_exchange_key(
+                        client=client,
+                        contact=self.contacts_menu.current_contact,
+                    )
             case State.SEND_MESSAGE:
                 self._post_message(client)
             case _:

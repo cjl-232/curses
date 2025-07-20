@@ -45,6 +45,11 @@ class Contact(Base):
         unique=True,
         nullable=False,
     )
+    sent_exchange_keys: Mapped[list['SentExchangeKey']] = relationship(
+        argument='SentExchangeKey',
+        lazy='selectin',
+        back_populates='contact',
+    )
     fernet_keys: Mapped[list['FernetKey']] = relationship(
         argument='FernetKey',
         order_by='FernetKey.timestamp.desc()',
