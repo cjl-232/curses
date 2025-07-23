@@ -8,13 +8,17 @@ from cryptography.hazmat.primitives import serialization
 file_path = 'private_key.pem'
 
 if os.path.exists(file_path):
-    print('A private key has already been generated.')
+    print(f'Error: {file_path} already exists.')
     exit()
 
 encoding = serialization.Encoding.PEM
 format = serialization.PrivateFormat.PKCS8
 password = getpass('Enter a password for the key (or leave blank):').encode()
 if password:
+    confirmation = getpass('Please re-enter the password.').encode()
+    if password != confirmation:
+        print('Error: passwords do not match.')
+        exit()
     encryption_algorithm = serialization.BestAvailableEncryption(password)
 else:
     encryption_algorithm = serialization.NoEncryption()
