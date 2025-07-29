@@ -6,7 +6,7 @@ the [Cryptcord API](https://github.com/cjl232-redux/cryptcord-server).
 
 ## Requirements
 
-
+* Python 3.13 and up.
 
 ## Installation and Setup
 
